@@ -94,6 +94,7 @@ func (p *Proxy) DoRequest(req *restful.Request, op string, proxyrequest *ProxyRe
 				SetHeader(restful.HEADER_ContentType, restful.MIME_JSON).
 				SetHeader(apiv1alpha1.BackendTokenHeader, constants.Nonce).
 				SetHeader(apiv1alpha1.AuthorizationTokenHeader, authtoken).
+				SetHeader(constants.BflUserKey, constants.Owner).
 				SetBody(proxyrequest).
 				SetResult(&ret).
 				Post(url)
@@ -170,6 +171,15 @@ func (p *Proxy) ProxyLegacyAPI(ctx context.Context,
 		}
 
 		wsProxy := NewWsProxy()
+		wsProxy.Director = func(req *http.Request, header http.Header) {
+			header.Add(apiv1alpha1.BackendTokenHeader, constants.Nonce)
+			header.Add(constants.BflUserKey, constants.Owner)
+
+			for _, auth := range req.Header[http.CanonicalHeaderKey("Authorization")] {
+				header.Add("Authorization", auth)
+			}
+
+		}
 		return wsProxy.doWs(req.Request, resp, wsURL)
 	default:
 		dump, err := httputil.DumpRequest(req.Request, true)
@@ -188,6 +198,7 @@ func (p *Proxy) ProxyLegacyAPI(ctx context.Context,
 			SetQueryParamsFromValues(req.Request.URL.Query()).
 			SetHeaderMultiValues(req.Request.Header).
 			SetHeader(apiv1alpha1.BackendTokenHeader, constants.Nonce).
+			SetHeader(constants.BflUserKey, constants.Owner).
 			SetBody(bodyData)
 
 		return proxyReq.Execute(method, providerURL)
