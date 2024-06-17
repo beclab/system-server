@@ -19,7 +19,7 @@ RUN cd bytetrade.io/web3os/system-server && \
         go mod tidy 
 
 RUN cd bytetrade.io/web3os/system-server && \ 
-    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -a -o system-server cmd/server/main.go
+    CGO_ENABLED=1 go build -ldflags="-s -w" -a -o system-server cmd/server/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
