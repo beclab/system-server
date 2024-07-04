@@ -6,6 +6,7 @@ import (
 	"bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	prodiverregistry "bytetrade.io/web3os/system-server/pkg/providerregistry/v1alpha1"
 	serviceproxy "bytetrade.io/web3os/system-server/pkg/serviceproxy/v1alpha1"
+
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	apiruntime "github.com/go-openapi/runtime"
@@ -15,7 +16,7 @@ import (
 var (
 	MODULE_TAGS      = []string{"service-proxy-leagcy"}
 	ParamSubPathExpr = "{" + serviceproxy.ParamSubPath + ":*}"
-	RoutePath        = "/{" + api.ParamGroup + "}/{" + api.ParamVersion + "}/" + ParamSubPathExpr
+	RoutePath        = "/{" + api.ParamDataType + "}/{" + api.ParamGroup + "}/{" + api.ParamVersion + "}/" + ParamSubPathExpr
 )
 
 func AddLegacyAPIToContainer(c *restful.Container,
@@ -69,10 +70,84 @@ func AddLegacyAPIToContainer(c *restful.Container,
 	return nil
 }
 
+func AddLegacyAPIV2ToContainer(c *restful.Container,
+	registry *prodiverregistry.Registry,
+) error {
+	ws := newWebServiceV2()
+
+	ws.Route(ws.GET(RoutePath).
+		To(newHandler(resty.MethodGet, registry).doV2).
+		Doc("Proxy get").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.POST(RoutePath).
+		To(newHandler(resty.MethodPost, registry).doV2).
+		Doc("Proxy post").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.PUT(RoutePath).
+		To(newHandler(resty.MethodPut, registry).doV2).
+		Doc("Proxy put").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.DELETE(RoutePath).
+		To(newHandler(resty.MethodDelete, registry).doV2).
+		Doc("Proxy delete").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.PATCH(RoutePath).
+		To(newHandler(resty.MethodPatch, registry).doV2).
+		Doc("Proxy patch").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.HEAD(RoutePath).
+		To(newHandler(resty.MethodHead, registry).doV2).
+		Doc("Proxy head").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	ws.Route(ws.OPTIONS(RoutePath).
+		To(newHandler(resty.MethodOptions, registry).doV2).
+		Doc("Proxy options").
+		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		Returns(http.StatusOK, "Success to proxy", nil))
+
+	c.Add(ws)
+	return nil
+}
+
 func newWebService() *restful.WebService {
 	webservice := restful.WebService{}
 
 	webservice.Path(serviceproxy.LEAGCY_PATCH).
+		Consumes(restful.MIME_JSON,
+			restful.MIME_OCTET,
+			restful.MIME_XML,
+			restful.MIME_ZIP,
+			apiruntime.HTMLMime,
+			apiruntime.TextMime,
+			apiruntime.MultipartFormMime,
+			apiruntime.URLencodedFormMime).
+		Produces(restful.MIME_JSON,
+			restful.MIME_OCTET,
+			restful.MIME_XML,
+			restful.MIME_ZIP,
+			apiruntime.HTMLMime,
+			apiruntime.TextMime,
+			apiruntime.MultipartFormMime,
+			apiruntime.URLencodedFormMime)
+	return &webservice
+}
+
+func newWebServiceV2() *restful.WebService {
+	webservice := restful.WebService{}
+
+	webservice.Path(serviceproxy.LEAGCY_PATCH_V2).
 		Consumes(restful.MIME_JSON,
 			restful.MIME_OCTET,
 			restful.MIME_XML,

@@ -120,12 +120,107 @@ func (p *Proxy) ProxyLegacyAPI(ctx context.Context,
 	resp *restful.Response,
 ) (interface{}, error) {
 	klog.Info("send request to legacy api")
+	klog.Infof("proxyLegacyAPI: header: %v", req.Request.Header)
 
 	version := req.PathParameter(apiv1alpha1.ParamVersion)
 	group := req.PathParameter(apiv1alpha1.ParamGroup)
 
 	provider, err := p.registry.GetProvider(ctx,
 		sysv1alpha1.LegacyAPI,
+		group,
+		version,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	path := req.PathParameter(ParamSubPath)
+
+	if len(provider.Spec.OpApis) > 0 {
+		if func() bool {
+			for _, op := range provider.Spec.OpApis {
+				if strings.ToUpper(op.Name) == method &&
+					fmt.Sprintf("/%s", path) == op.URI {
+					return false
+				}
+			}
+
+			// not found in provided apis
+			return true
+		}() {
+			return nil, errors.New("unsupported api of provider")
+		}
+	}
+
+	var providerURL string
+	if strings.HasPrefix(provider.Spec.Endpoint, "http://") ||
+		strings.HasPrefix(provider.Spec.Endpoint, "https://") {
+		providerURL = fmt.Sprintf("%s/%s", provider.Spec.Endpoint, path)
+	} else {
+		providerURL = fmt.Sprintf("http://%s/%s", provider.Spec.Endpoint, path)
+	}
+
+	klog.Info("provider url: ", providerURL)
+
+	switch {
+	// websocket group api
+	case method == "GET" && strings.HasPrefix(group, Group_WebSocket):
+		wsURL, err := url.Parse(providerURL)
+		if err != nil {
+			return nil, err
+		}
+
+		wsProxy := NewWsProxy()
+		wsProxy.Director = func(req *http.Request, header http.Header) {
+			header.Add(apiv1alpha1.BackendTokenHeader, constants.Nonce)
+			header.Add(constants.BflUserKey, constants.Owner)
+
+			for _, auth := range req.Header[http.CanonicalHeaderKey("Authorization")] {
+				header.Add("Authorization", auth)
+			}
+
+		}
+		return wsProxy.doWs(req.Request, resp, wsURL)
+	default:
+		dump, err := httputil.DumpRequest(req.Request, true)
+		if err != nil {
+			klog.Error("dump request err: ", err)
+		}
+		klog.Info("orig request: ", string(dump))
+
+		client := resty.New()
+		bodyData, err := ioutil.ReadAll(req.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		proxyReq := client.SetTimeout(2*time.Second).R().
+			SetQueryParamsFromValues(req.Request.URL.Query()).
+			SetHeaderMultiValues(req.Request.Header).
+			SetHeader(apiv1alpha1.BackendTokenHeader, constants.Nonce).
+			SetHeader(constants.BflUserKey, constants.Owner).
+			SetBody(bodyData)
+
+		return proxyReq.Execute(method, providerURL)
+	}
+}
+
+func (p *Proxy) ProxyLegacyAPIV2(ctx context.Context,
+	method string,
+	req *restful.Request,
+	resp *restful.Response,
+) (interface{}, error) {
+	klog.Info("send request to legacy api")
+	klog.Infof("proxyLegacyAPI: header: %v", req.Request.Header)
+
+	dataType := req.PathParameter(apiv1alpha1.ParamDataType)
+	version := req.PathParameter(apiv1alpha1.ParamVersion)
+	group := req.PathParameter(apiv1alpha1.ParamGroup)
+	klog.Infof("dataType: %s, group: %s, version: %s", dataType, group, version)
+
+	provider, err := p.registry.GetProvider(ctx,
+		dataType,
 		group,
 		version,
 	)

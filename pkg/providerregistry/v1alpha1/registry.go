@@ -13,6 +13,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var ErrProviderNotFound = errors.New("provider not found")
+
 type Registry struct {
 	registryClientset clientset.Interface
 	namespace         string
@@ -50,7 +52,7 @@ func (r *Registry) GetProvider(ctx context.Context, dataType, group, version str
 
 	}
 
-	return nil, errors.New("provider not found")
+	return nil, ErrProviderNotFound
 }
 
 func (r *Registry) GetWatchers(ctx context.Context, dataType, group, version string) ([]*sysv1alpha1.ProviderRegistry, error) {
