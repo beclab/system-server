@@ -2,23 +2,24 @@
 FROM golang:1.18 as builder
 
 WORKDIR /workspace
+
+RUN git clone https://github.com/kubernetes/code-generator.git bytetrade.io/web3os/code-generator && \
+    cd bytetrade.io/web3os/code-generator && git checkout -b release-1.27 && cd -
+
 # Copy the Go Modules manifests
 COPY go.mod bytetrade.io/web3os/system-server/go.mod
 COPY go.sum bytetrade.io/web3os/system-server/go.sum
+
+# Build
+RUN cd bytetrade.io/web3os/system-server && \
+        go mod download
 
 # Copy the go source
 COPY cmd/ bytetrade.io/web3os/system-server/cmd/
 COPY pkg/ bytetrade.io/web3os/system-server/pkg/
 COPY hack/ bytetrade.io/web3os/system-server/hack/
 
-RUN git clone https://github.com/kubernetes/code-generator.git bytetrade.io/web3os/code-generator && \ 
-    cd bytetrade.io/web3os/code-generator && git checkout -b release-1.27 && cd - 
-
-# Build
 RUN cd bytetrade.io/web3os/system-server && \
-        go mod tidy 
-
-RUN cd bytetrade.io/web3os/system-server && \ 
     CGO_ENABLED=1 go build -ldflags="-s -w" -a -o system-server cmd/server/main.go
 
 # Use distroless as minimal base image to package the manager binary

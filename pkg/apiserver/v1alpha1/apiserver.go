@@ -67,6 +67,7 @@ func (s *APIServer) PrepareRun(kubeconfig *rest.Config, sysclientset *sysclients
 	utilruntime.Must(message.AddMessageDispatcherToContainer(s.serverCtx, sysclientset, s.container, s.dbOperator, &ctrlSet))
 	utilruntime.Must(permission.AddPermissionControlToContainer(s.container, &ctrlSet, kubeconfig))
 	utilruntime.Must(legacy.AddLegacyAPIToContainer(s.container, registry))
+	utilruntime.Must(legacy.AddLegacyAPIV2ToContainer(s.container, registry))
 
 	s.installAPIDocs()
 

@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	LEAGCY_PATCH = "/legacy/v1alpha1"
-	ParamSubPath = "subpath"
+	LEAGCY_PATCH    = "/legacy/v1alpha1"
+	ParamSubPath    = "subpath"
+	LEAGCY_PATCH_V2 = "/system-server/v2"
 )
 
 type ProxyRequest struct {
