@@ -211,13 +211,9 @@ func (p *Proxy) ProxyLegacyAPIV2(ctx context.Context,
 	req *restful.Request,
 	resp *restful.Response,
 ) (interface{}, error) {
-	klog.Info("send request to legacy api")
-	klog.Infof("proxyLegacyAPI: header: %v", req.Request.Header)
-
 	dataType := req.PathParameter(apiv1alpha1.ParamDataType)
 	version := req.PathParameter(apiv1alpha1.ParamVersion)
 	group := req.PathParameter(apiv1alpha1.ParamGroup)
-	klog.Infof("dataType: %s, group: %s, version: %s", dataType, group, version)
 
 	provider, err := p.registry.GetProvider(ctx,
 		dataType,
@@ -230,22 +226,6 @@ func (p *Proxy) ProxyLegacyAPIV2(ctx context.Context,
 	}
 
 	path := req.PathParameter(ParamSubPath)
-
-	if len(provider.Spec.OpApis) > 0 {
-		if func() bool {
-			for _, op := range provider.Spec.OpApis {
-				if strings.ToUpper(op.Name) == method &&
-					fmt.Sprintf("/%s", path) == op.URI {
-					return false
-				}
-			}
-
-			// not found in provided apis
-			return true
-		}() {
-			return nil, errors.New("unsupported api of provider")
-		}
-	}
 
 	var providerURL string
 	if strings.HasPrefix(provider.Spec.Endpoint, "http://") ||
@@ -295,6 +275,11 @@ func (p *Proxy) ProxyLegacyAPIV2(ctx context.Context,
 			SetHeader(apiv1alpha1.BackendTokenHeader, constants.Nonce).
 			SetHeader(constants.BflUserKey, constants.Owner).
 			SetBody(bodyData)
+
+		acceptEncoding := req.Request.Header.Get("Accept-Encoding")
+		if strings.Contains(acceptEncoding, "br") {
+			proxyReq.SetHeader("Accept-Encoding", "gzip")
+		}
 
 		return proxyReq.Execute(method, providerURL)
 	}

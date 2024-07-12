@@ -79,42 +79,49 @@ func AddLegacyAPIV2ToContainer(c *restful.Container,
 		To(newHandler(resty.MethodGet, registry).doV2).
 		Doc("Proxy get").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.POST(RoutePath).
 		To(newHandler(resty.MethodPost, registry).doV2).
 		Doc("Proxy post").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.PUT(RoutePath).
 		To(newHandler(resty.MethodPut, registry).doV2).
 		Doc("Proxy put").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.DELETE(RoutePath).
 		To(newHandler(resty.MethodDelete, registry).doV2).
 		Doc("Proxy delete").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.PATCH(RoutePath).
 		To(newHandler(resty.MethodPatch, registry).doV2).
 		Doc("Proxy patch").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.HEAD(RoutePath).
 		To(newHandler(resty.MethodHead, registry).doV2).
 		Doc("Proxy head").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	ws.Route(ws.OPTIONS(RoutePath).
 		To(newHandler(resty.MethodOptions, registry).doV2).
 		Doc("Proxy options").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
+		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
 	c.Add(ws)
