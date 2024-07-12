@@ -100,10 +100,13 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 		api.HandleForbidden(resp, req, errors.New("invalid signature"))
 		return
 	}
-
-	err := permission.ValidateAppKeyWithRequest(appKey, h.method, req)
+	err := permission.ValidateAppKeyWithRequest(appKey, req)
 	if err != nil {
-		api.HandleForbidden(resp, req, fmt.Errorf("invalid appkey: err=%v", err))
+		if errors.Is(err, prodiverregistry.ErrProviderNotFound) {
+			api.HandleNotFound(resp, req, err)
+			return
+		}
+		api.HandleForbidden(resp, req, fmt.Errorf("permission denied: err=%v", err))
 		return
 	}
 
@@ -148,6 +151,8 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 		for _, c := range proxyResp.Cookies() {
 			http.SetCookie(resp, c)
 		}
+
+		resp.Header().Del("Content-Length")
 
 		resp.WriteHeader(proxyResp.StatusCode())
 		resp.Write(proxyResp.Body())
