@@ -16,7 +16,8 @@ import (
 var (
 	MODULE_TAGS      = []string{"service-proxy-leagcy"}
 	ParamSubPathExpr = "{" + serviceproxy.ParamSubPath + ":*}"
-	RoutePath        = "/{" + api.ParamDataType + "}/{" + api.ParamGroup + "}/{" + api.ParamVersion + "}/" + ParamSubPathExpr
+	RoutePath        = "/{" + api.ParamGroup + "}/{" + api.ParamVersion + "}/" + ParamSubPathExpr
+	RoutePathV2      = "/{" + api.ParamDataType + "}/{" + api.ParamGroup + "}/{" + api.ParamVersion + "}/" + ParamSubPathExpr
 )
 
 func AddLegacyAPIToContainer(c *restful.Container,
@@ -75,49 +76,49 @@ func AddLegacyAPIV2ToContainer(c *restful.Container,
 ) error {
 	ws := newWebServiceV2()
 
-	ws.Route(ws.GET(RoutePath).
+	ws.Route(ws.GET(RoutePathV2).
 		To(newHandler(resty.MethodGet, registry).doV2).
 		Doc("Proxy get").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.POST(RoutePath).
+	ws.Route(ws.POST(RoutePathV2).
 		To(newHandler(resty.MethodPost, registry).doV2).
 		Doc("Proxy post").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.PUT(RoutePath).
+	ws.Route(ws.PUT(RoutePathV2).
 		To(newHandler(resty.MethodPut, registry).doV2).
 		Doc("Proxy put").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.DELETE(RoutePath).
+	ws.Route(ws.DELETE(RoutePathV2).
 		To(newHandler(resty.MethodDelete, registry).doV2).
 		Doc("Proxy delete").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.PATCH(RoutePath).
+	ws.Route(ws.PATCH(RoutePathV2).
 		To(newHandler(resty.MethodPatch, registry).doV2).
 		Doc("Proxy patch").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.HEAD(RoutePath).
+	ws.Route(ws.HEAD(RoutePathV2).
 		To(newHandler(resty.MethodHead, registry).doV2).
 		Doc("Proxy head").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
 		ContentEncodingEnabled(true).
 		Returns(http.StatusOK, "Success to proxy", nil))
 
-	ws.Route(ws.OPTIONS(RoutePath).
+	ws.Route(ws.OPTIONS(RoutePathV2).
 		To(newHandler(resty.MethodOptions, registry).doV2).
 		Doc("Proxy options").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
