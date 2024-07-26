@@ -272,7 +272,7 @@ func (p *Proxy) ProxyLegacyAPIV2(ctx context.Context,
 			DisableCompression: true,
 		}).SetDoNotParseResponse(true)
 
-		proxyReq := client.SetTimeout(360*time.Second).R().
+		proxyReq := client.SetTimeout(3600*time.Second).R().
 			SetQueryParamsFromValues(req.Request.URL.Query()).
 			SetHeaderMultiValues(req.Request.Header).
 			SetHeader(apiv1alpha1.BackendTokenHeader, constants.Nonce).
