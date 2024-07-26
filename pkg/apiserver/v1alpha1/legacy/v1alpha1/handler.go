@@ -1,8 +1,11 @@
 package legacy
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"reflect"
@@ -125,7 +128,6 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 		klog.Info("websocket proxy connected")
 		return
 	}
-
 	switch proxyResp := proxyRespIntf.(type) {
 	case *resty.Response:
 		dump, err := httputil.DumpRequest(proxyResp.Request.RawRequest, true)
@@ -134,7 +136,6 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 		} else {
 			klog.Info("proxy request: ", string(dump))
 		}
-
 		dump, err = httputil.DumpResponse(proxyResp.RawResponse, false)
 		if err != nil {
 			klog.Error("dump response err: ", err)
@@ -147,19 +148,51 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 				resp.Header().Set(h, v)
 			}
 		}
-
 		for _, c := range proxyResp.Cookies() {
 			http.SetCookie(resp, c)
 		}
-
-		resp.Header().Del("Content-Length")
-
-		resp.WriteHeader(proxyResp.StatusCode())
-		resp.Write(proxyResp.Body())
+		if proxyResp.RawBody() != nil {
+			defer proxyResp.RawBody().Close()
+		}
+		if isSSEOrNdJson(resp.Header()) {
+			resp.WriteHeader(proxyResp.StatusCode())
+			err = handleSSEOrNdJsonPROXY(resp, proxyResp.RawBody())
+			if err != nil {
+				klog.Infof("handleSSEOrNdJsonPROXY err=%v", err)
+			}
+		} else {
+			resp.Header().Del("Content-Length")
+			resp.WriteHeader(proxyResp.StatusCode())
+			content, _ := ioutil.ReadAll(proxyResp.RawBody())
+			resp.Write(content)
+		}
 
 	case *serviceproxy.WsProxyResponse:
 		resp.WriteHeader(proxyResp.RawResponse.StatusCode)
 		resp.Write(proxyResp.Body)
 	}
 
+}
+
+func isSSEOrNdJson(header http.Header) bool {
+	return header.Get("Content-Type") == "text/event-stream" || header.Get("Content-Type") == "application/x-ndjson"
+}
+
+func handleSSEOrNdJsonPROXY(w *restful.Response, body io.Reader) error {
+	reader := bufio.NewReader(body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				klog.Errorf("Error reading SSE: %v", err)
+			}
+			return err
+		}
+		_, err = w.Write(line)
+		if err != nil {
+			klog.Errorf("Error writing SSE: %v", err)
+			return err
+		}
+		w.Flush()
+	}
 }
