@@ -52,11 +52,16 @@ func (h *Handler) do(req *restful.Request, resp *restful.Response) {
 
 	switch proxyResp := proxyRespIntf.(type) {
 	case *resty.Response:
-		dump, err := httputil.DumpRequest(proxyResp.Request.RawRequest, true)
-		if err != nil {
-			klog.Error("dump request err: ", err)
+		dump, e := httputil.DumpRequest(proxyResp.Request.RawRequest, true)
+		if e != nil {
+			klog.Error("dump request err: ", e)
 		} else {
 			klog.Info("proxy request: ", string(dump))
+		}
+		if proxyResp.RawResponse == nil {
+			klog.Info("proxy error nil raw response: ", err)
+			api.HandleError(resp, req, err)
+			return
 		}
 
 		dump, err = httputil.DumpResponse(proxyResp.RawResponse, false)
@@ -80,6 +85,11 @@ func (h *Handler) do(req *restful.Request, resp *restful.Response) {
 		resp.Write(proxyResp.Body())
 
 	case *serviceproxy.WsProxyResponse:
+		if proxyResp.RawResponse == nil {
+			klog.Info("ws proxy error: ", err)
+			api.HandleError(resp, req, err)
+			return
+		}
 		resp.WriteHeader(proxyResp.RawResponse.StatusCode)
 		resp.Write(proxyResp.Body)
 	}
@@ -130,11 +140,16 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 	}
 	switch proxyResp := proxyRespIntf.(type) {
 	case *resty.Response:
-		dump, err := httputil.DumpRequest(proxyResp.Request.RawRequest, true)
-		if err != nil {
-			klog.Error("dump request err: ", err)
+		dump, e := httputil.DumpRequest(proxyResp.Request.RawRequest, true)
+		if e != nil {
+			klog.Error("dump request err: ", e)
 		} else {
 			klog.Info("proxy request: ", string(dump))
+		}
+		if proxyResp.RawResponse == nil {
+			klog.Info("proxy error nil raw response: ", err)
+			api.HandleError(resp, req, err)
+			return
 		}
 		dump, err = httputil.DumpResponse(proxyResp.RawResponse, false)
 		if err != nil {
@@ -168,6 +183,11 @@ func (h *Handler) doV2(req *restful.Request, resp *restful.Response) {
 		}
 
 	case *serviceproxy.WsProxyResponse:
+		if proxyResp.RawResponse == nil {
+			klog.Info("ws proxy error: ", err)
+			api.HandleError(resp, req, err)
+			return
+		}
 		resp.WriteHeader(proxyResp.RawResponse.StatusCode)
 		resp.Write(proxyResp.Body)
 	}
