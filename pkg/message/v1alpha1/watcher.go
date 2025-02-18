@@ -1,33 +1,32 @@
 package message
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	apiv1alpha1 "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	"bytetrade.io/web3os/system-server/pkg/constants"
 
-	"github.com/emicklei/go-restful/v3"
 	"github.com/go-resty/resty/v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 )
 
-var (
-	NM_URL = "notification-manager-svc.kubesphere-monitoring-system:19093"
-)
-
-func init() {
-	url := os.Getenv("NM_URL")
-	if url != "" {
-		NM_URL = url
-	}
-}
+//var (
+//	NM_URL = "notification-manager-svc.kubesphere-monitoring-system:19093"
+//)
+//
+//func init() {
+//	url := os.Getenv("NM_URL")
+//	if url != "" {
+//		NM_URL = url
+//	}
+//}
 
 type EventWatcher struct {
 	httpClient *resty.Client
@@ -59,78 +58,59 @@ func (e *EventWatcher) DoWatch(event *Event) error {
 		},
 	}
 
-	// Set the webhook receiver to notification server for kubeshpere notification manager
-	// and send the notification message to Notification Mananger
-	// Notification Mananger will pick the webhook receiver to send message
-	enableWebhook := true
 	notificationServiceUrl := fmt.Sprintf("http://notifications-service.%s/notification/system/push", strings.Replace(constants.MyNamespace, "user-system-", "user-space-", 1))
-	request := NotificationManagerRequest{
-		Alert: &struct {
-			Alerts Alerts `json:"alerts"`
-		}{
-			Alerts: Alerts{
-				alert,
-			},
-		},
-		Receiver: &Receiver{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "notification.kubesphere.io/v2beta2",
-				Kind:       "Receiver",
-			},
 
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "sys-receiver",
-				Labels: map[string]string{
-					"app":  "notification-manager",
-					"type": "global",
-				},
-			},
-
-			Spec: ReceiverSpec{
-				Webhook: &WebhookReceiver{
-					Enabled: &enableWebhook,
-					URL:     &notificationServiceUrl,
-					HTTPConfig: &HTTPClientConfig{
-						BasicAuth: &BasicAuth{
-							Username: apiv1alpha1.BackendTokenHeader,
-							Password: &Credential{
-								Value: constants.Nonce,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	data, err := json.Marshal(request)
+	var buf bytes.Buffer
+	err = json.NewEncoder(&buf).Encode(alert)
 	if err != nil {
 		return err
 	}
-
-	klog.Info("send alert to notification manager, ", string(data))
-
-	postURL := fmt.Sprintf("http://%s/api/v2/notifications", NM_URL)
-	res, err := e.httpClient.R().
-		SetHeader(restful.HEADER_ContentType, restful.MIME_JSON).
-		SetBody(data).
-		Post(postURL)
-
+	req, err := http.NewRequest(http.MethodPost, notificationServiceUrl, &buf)
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(apiv1alpha1.BackendTokenHeader, constants.Nonce)
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	_, err = doHttpRequest(context.TODO(), client, req)
 
-	klog.Info("send alert to notification manager, get response: ", string(res.Body()))
-
-	var nmResp NotificationManagerResponse
-	err = json.Unmarshal(res.Body(), &nmResp)
 	if err != nil {
 		return err
-	}
-
-	if nmResp.Status != http.StatusOK {
-		return errors.New(nmResp.Message)
 	}
 
 	return nil
+}
+
+func doHttpRequest(ctx context.Context, client *http.Client, request *http.Request) ([]byte, error) {
+
+	if client == nil {
+		client = &http.Client{}
+	}
+
+	resp, err := client.Do(request.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		msg := ""
+		if len(body) > 0 {
+			msg = string(body)
+		}
+		return body, fmt.Errorf("%d, %s", resp.StatusCode, msg)
+	}
+
+	return body, nil
 }
