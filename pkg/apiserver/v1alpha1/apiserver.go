@@ -8,6 +8,7 @@ import (
 	legacy "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/legacy/v1alpha1"
 	"bytetrade.io/web3os/system-server/pkg/constants"
 	sysclientset "bytetrade.io/web3os/system-server/pkg/generated/clientset/versioned"
+	"bytetrade.io/web3os/system-server/pkg/generated/listers/sys/v1alpha1"
 	message "bytetrade.io/web3os/system-server/pkg/message/v1alpha1"
 	"bytetrade.io/web3os/system-server/pkg/message/v1alpha1/db"
 	permission "bytetrade.io/web3os/system-server/pkg/permission/v1alpha1"
@@ -49,16 +50,21 @@ func New(ctx context.Context) (*APIServer, error) {
 }
 
 // PrepareRun do prepares for API server.
-func (s *APIServer) PrepareRun(kubeconfig *rest.Config, sysclientset *sysclientset.Clientset) error {
+func (s *APIServer) PrepareRun(
+	kubeconfig *rest.Config,
+	sysclientset *sysclientset.Clientset,
+	permissionLister v1alpha1.ApplicationPermissionLister,
+	providerLister v1alpha1.ProviderRegistryLister,
+) error {
 	s.container.Filter(logRequestAndResponse)
 	s.container.Router(restful.CurlyRouter{})
 	s.container.RecoverHandler(func(panicReason interface{}, httpWriter http.ResponseWriter) {
 		logStackOnRecover(panicReason, httpWriter)
 	})
 
-	registry := prodiverregistry.NewRegistry(sysclientset)
+	registry := prodiverregistry.NewRegistry(sysclientset, providerLister)
 	ctrlSet := permission.PermissionControlSet{
-		Ctrl: permission.NewPermissionControl(sysclientset),
+		Ctrl: permission.NewPermissionControl(sysclientset, permissionLister),
 		Mgr:  permission.NewAccessManager(),
 	}
 

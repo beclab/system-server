@@ -12,9 +12,10 @@ import (
 	sysv1alpha1 "bytetrade.io/web3os/system-server/pkg/apis/sys/v1alpha1"
 	"bytetrade.io/web3os/system-server/pkg/constants"
 	clientset "bytetrade.io/web3os/system-server/pkg/generated/clientset/versioned"
-
+	v1alpha1 "bytetrade.io/web3os/system-server/pkg/generated/listers/sys/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 const (
@@ -22,33 +23,33 @@ const (
 )
 
 type PermissionControl struct {
+	permissionLister    v1alpha1.ApplicationPermissionLister
 	permissionClientset clientset.Interface
 	rand                *rand.Rand
 }
 
-func NewPermissionControl(clientset clientset.Interface) *PermissionControl {
+func NewPermissionControl(clientset clientset.Interface, lister v1alpha1.ApplicationPermissionLister) *PermissionControl {
 
 	return &PermissionControl{
+		permissionLister:    lister,
 		permissionClientset: clientset,
 		rand:                rand.New(rand.NewSource(time.Now().Unix())),
 	}
 }
 
-func (p *PermissionControl) getAppPermissionFromAppKey(ctx context.Context, appkey string) (*sysv1alpha1.ApplicationPermission, error) {
-	aps, err := p.permissionClientset.SysV1alpha1().
-		ApplicationPermissions(constants.MyNamespace).
-		List(ctx, metav1.ListOptions{})
+func (p *PermissionControl) getAppPermissionFromAppKey(_ context.Context, appkey string) (*sysv1alpha1.ApplicationPermission, error) {
+	aps, err := p.permissionLister.ApplicationPermissions(constants.MyNamespace).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
 
-	if len(aps.Items) == 0 {
-		return nil, errors.New("app not found")
+	if len(aps) == 0 {
+		return nil, errors.New("none of app permissions")
 	}
 
-	for _, ap := range aps.Items {
+	for _, ap := range aps {
 		if ap.Spec.Key == appkey {
-			return &ap, nil
+			return ap, nil
 		}
 	}
 
@@ -67,8 +68,8 @@ func (p *PermissionControl) verifyPermission(appPerm *sysv1alpha1.ApplicationPer
 }
 
 func (p *PermissionControl) applyPermission(ctx context.Context, permReg *PermissionRegister) (*RegisterResp, error) {
-	oldAP, err := p.permissionClientset.SysV1alpha1().ApplicationPermissions(constants.MyNamespace).
-		Get(ctx, permReg.App, metav1.GetOptions{})
+	oldAP, err := p.permissionLister.ApplicationPermissions(constants.MyNamespace).
+		Get(permReg.App)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
@@ -123,8 +124,8 @@ func (p *PermissionControl) applyPermission(ctx context.Context, permReg *Permis
 }
 
 func (p *PermissionControl) deletePermission(ctx context.Context, name string) error {
-	_, err := p.permissionClientset.SysV1alpha1().ApplicationPermissions(constants.MyNamespace).
-		Get(ctx, name, metav1.GetOptions{})
+	_, err := p.permissionLister.ApplicationPermissions(constants.MyNamespace).
+		Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
