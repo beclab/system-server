@@ -9,6 +9,7 @@ import (
 	apiserver "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1"
 	sysclientset "bytetrade.io/web3os/system-server/pkg/generated/clientset/versioned"
 	informers "bytetrade.io/web3os/system-server/pkg/generated/informers/externalversions"
+	"bytetrade.io/web3os/system-server/pkg/generated/listers/sys/v1alpha1"
 	prodiverregistry "bytetrade.io/web3os/system-server/pkg/providerregistry/v1alpha1"
 	"bytetrade.io/web3os/system-server/pkg/signals"
 
@@ -34,7 +35,11 @@ func main() {
 	sysClient := sysclientset.NewForConfigOrDie(config)
 
 	informerFactory := informers.NewSharedInformerFactory(sysClient, 0)
-	controller := prodiverregistry.NewController(sysClient, informerFactory.Sys().V1alpha1().ProviderRegistries())
+	providerInformer := informerFactory.Sys().V1alpha1().ProviderRegistries()
+	informerFactory.Sys().V1alpha1().ApplicationPermissions().Informer()
+	permissionInformer := informerFactory.Sys().V1alpha1().ApplicationPermissions()
+
+	controller := prodiverregistry.NewController(sysClient, providerInformer)
 
 	cmd := &cobra.Command{
 		Use:   "system-server",
@@ -43,7 +48,8 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			go func() {
 				defer cancel()
-				if err := APIRun(apiCtx, config, sysClient); err != nil {
+				if err := APIRun(apiCtx, config, sysClient,
+					permissionInformer.Lister(), providerInformer.Lister()); err != nil {
 					panic(err)
 				}
 			}()
@@ -68,13 +74,15 @@ func main() {
 }
 
 // APIRun is responsible for running the API server.
-func APIRun(ctx context.Context, kubeconfig *rest.Config, sysclientset *sysclientset.Clientset) error {
+func APIRun(ctx context.Context, kubeconfig *rest.Config, sysclientset *sysclientset.Clientset,
+	permissionLister v1alpha1.ApplicationPermissionLister, providerLister v1alpha1.ProviderRegistryLister,
+) error {
 	server, err := apiserver.New(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = server.PrepareRun(kubeconfig, sysclientset)
+	err = server.PrepareRun(kubeconfig, sysclientset, permissionLister, providerLister)
 	if err != nil {
 		return err
 	}

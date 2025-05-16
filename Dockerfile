@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.18 as builder
+FROM golang:1.22.6 as builder
 
 WORKDIR /workspace
 
@@ -15,9 +15,7 @@ RUN cd bytetrade.io/web3os/system-server && \
         go mod download
 
 # Copy the go source
-COPY cmd/ bytetrade.io/web3os/system-server/cmd/
-COPY pkg/ bytetrade.io/web3os/system-server/pkg/
-COPY hack/ bytetrade.io/web3os/system-server/hack/
+COPY . bytetrade.io/web3os/system-server/
 
 RUN cd bytetrade.io/web3os/system-server && \
     CGO_ENABLED=1 go build -ldflags="-s -w" -a -o system-server cmd/server/main.go
