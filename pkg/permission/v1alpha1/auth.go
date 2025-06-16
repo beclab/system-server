@@ -44,7 +44,7 @@ func (h *Handler) limitIP(req *restful.Request, resp *restful.Response, next fun
 }
 
 func (h *Handler) getAutheliaIP(ctx context.Context) ([]string, error) {
-	pods, err := h.kubeClientSet.CoreV1().Pods("os-system").List(ctx, metav1.ListOptions{
+	pods, err := h.kubeClientSet.CoreV1().Pods("os-framework").List(ctx, metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(
 			labels.Set{
 				"app": "authelia-backend",
