@@ -3,7 +3,7 @@ package permission
 import (
 	"context"
 	"fmt"
-
+	
 	"github.com/dgrijalva/jwt-go"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -111,7 +111,7 @@ func getLLdapJwtKey(ctx context.Context, kubeConfig *rest.Config) ([]byte, error
 		return nil, err
 	}
 
-	secret, err := kubeClientInService.CoreV1().Secrets("os-framework").Get(ctx, "lldap-credentials", metav1.GetOptions{})
+	secret, err := kubeClientInService.CoreV1().Secrets("os-platform").Get(ctx, "lldap-credentials", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
