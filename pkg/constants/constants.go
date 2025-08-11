@@ -11,6 +11,7 @@ const (
 	KubeSphereClientAttribute = "ksclient"
 	AuthorizationTokenKey     = "X-Authorization"
 	BflUserKey                = "X-BFL-USER"
+	AuthTokenCookieName       = "auth_token"
 )
 
 var (
