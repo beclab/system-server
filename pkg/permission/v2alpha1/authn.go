@@ -9,7 +9,6 @@ import (
 
 	"bytetrade.io/web3os/system-server/pkg/constants"
 	"github.com/brancz/kube-rbac-proxy/pkg/authn"
-	"github.com/golang-jwt/jwt"
 	"github.com/jellydator/ttlcache/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/union"
@@ -20,18 +19,11 @@ import (
 
 var _ authenticator.Request = (*lldapTokenAuthenticator)(nil)
 
-type Claims struct {
-	jwt.StandardClaims
-	// Private Claim Names
-	// Username user identity, deprecated field
-	Username string `json:"username,omitempty"`
-
-	Groups []string `json:"groups,omitempty"`
-	Mfa    int64    `json:"mfa,omitempty"`
-}
+var tokenCacheTTL = time.Minute * 5
 
 type lldapTokenAuthenticator struct {
-	tokenCache *ttlcache.Cache[string, *Claims]
+	tokenCache  *ttlcache.Cache[string, *Claims]
+	lldapServer string
 }
 
 // AuthenticateRequest implements authenticator.Request.
@@ -51,6 +43,7 @@ func (l *lldapTokenAuthenticator) AuthenticateRequest(req *http.Request) (*authe
 
 	claims := l.tokenCache.Get(token)
 	if claims != nil {
+		klog.Info("found token in cache")
 		return &authenticator.Response{
 			User: &user.DefaultInfo{
 				Name:   claims.Value().Username,
@@ -60,11 +53,34 @@ func (l *lldapTokenAuthenticator) AuthenticateRequest(req *http.Request) (*authe
 		}, true, nil
 	}
 
-	// TODO:
-	return nil, false, nil
+	// verify token
+	res, err := TokenVerify(l.lldapServer, token, token)
+	if err != nil {
+		klog.Errorf("Token verification failed: %v", err)
+		return nil, false, fmt.Errorf("token verification failed: %w", err)
+	}
+
+	klog.Info("token verified in lldap successfully, ", res)
+
+	c, err := parseToken(token)
+	if err != nil {
+		klog.Errorf("failed to parse token: %v", err)
+		return nil, false, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	response := authenticator.Response{
+		User: &user.DefaultInfo{
+			Name:   c.Username,
+			Groups: c.Groups,
+			UID:    c.Username,
+		},
+	}
+
+	l.tokenCache.Set(token, c, tokenCacheTTL)
+	return &response, true, nil
 }
 
-func UnionAllAuthenticators(ctx context.Context, cfg *authn.AuthnConfig, kubeClient kubernetes.Interface) (authenticator.Request, error) {
+func UnionAllAuthenticators(ctx context.Context, cfg *AuthnConfig, kubeClient kubernetes.Interface) (authenticator.Request, error) {
 	var authenticator authenticator.Request
 
 	// If OIDC configuration provided, use oidc authenticator
@@ -81,7 +97,7 @@ func UnionAllAuthenticators(ctx context.Context, cfg *authn.AuthnConfig, kubeCli
 		klog.Infof("Valid token audiences: %s", strings.Join(cfg.Token.Audiences, ", "))
 
 		tokenClient := kubeClient.AuthenticationV1()
-		delegatingAuthenticator, err := authn.NewDelegatingAuthenticator(tokenClient, cfg)
+		delegatingAuthenticator, err := authn.NewDelegatingAuthenticator(tokenClient, &cfg.AuthnConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to instantiate delegating authenticator: %w", err)
 		}
@@ -91,7 +107,8 @@ func UnionAllAuthenticators(ctx context.Context, cfg *authn.AuthnConfig, kubeCli
 	}
 
 	return union.New(&lldapTokenAuthenticator{ttlcache.New(
-		ttlcache.WithTTL[string, *Claims](time.Minute*5),
+		ttlcache.WithTTL[string, *Claims](tokenCacheTTL),
 		ttlcache.WithCapacity[string, *Claims](1000),
-	)}, authenticator), nil
+	), fmt.Sprintf("http://%s:%d", cfg.LLDAP.Server, cfg.LLDAP.Port),
+	}, authenticator), nil
 }

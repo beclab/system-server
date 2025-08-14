@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 
 	"k8s.io/klog/v2"
 )
@@ -26,4 +27,11 @@ func ListContains[T comparable](items []T, v T) bool {
 		}
 	}
 	return false
+}
+
+func GetEnvOrDefault(env string, defaultValue string) string {
+	if value, exists := os.LookupEnv(env); exists {
+		return value
+	}
+	return defaultValue
 }

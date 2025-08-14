@@ -33,7 +33,7 @@ func GetXForwardedURI(req *http.Request) (uri string) {
 	uri = req.Header.Get(headerXForwardedURI)
 
 	if len(uri) == 0 {
-		return req.RequestURI
+		return req.URL.String()
 	}
 
 	return uri

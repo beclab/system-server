@@ -39,11 +39,13 @@ import (
 	"github.com/brancz/kube-rbac-proxy/cmd/kube-rbac-proxy/app/options"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
 	"github.com/brancz/kube-rbac-proxy/pkg/filters"
-	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
 	rbac_proxy_tls "github.com/brancz/kube-rbac-proxy/pkg/tls"
 )
 
 func NewKubeRBACProxyCommand() *cobra.Command {
+	var lldapServer string
+	var lldapPort int
+
 	o := options.NewProxyRunOptions()
 	cmd := &cobra.Command{
 		Use: "kube-rbac-proxy",
@@ -77,6 +79,9 @@ that can perform RBAC authorization against the Kubernetes API using SubjectAcce
 				return err
 			}
 
+			completedOptions.lldapServer = lldapServer
+			completedOptions.lldapPort = lldapPort
+
 			return Run(completedOptions)
 		},
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -93,6 +98,12 @@ that can perform RBAC authorization against the Kubernetes API using SubjectAcce
 	namedFlagSets := o.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
+
+	// add lldap options
+	lldapFlagSet := namedFlagSets.FlagSet("lldap")
+	lldapFlagSet.StringVar(&lldapServer, "lldap-server", "lldap-service.os-platform", "The lldap server's service address.")
+	lldapFlagSet.IntVar(&lldapPort, "lldap-port", 17170, "The lldap server's service port.")
+
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
@@ -105,27 +116,6 @@ that can perform RBAC authorization against the Kubernetes API using SubjectAcce
 
 type configfile struct {
 	AuthorizationConfig *authz.Config `json:"authorization,omitempty"`
-}
-
-type completedProxyRunOptions struct {
-	insecureListenAddress string // DEPRECATED
-	secureListenAddress   string
-	proxyEndpointsPort    int
-
-	upstreamURL      *url.URL
-	upstreamForceH2C bool
-	upstreamCABundle *x509.CertPool
-
-	http2Disable bool
-	http2Options *http2.Server
-
-	auth *proxy.Config
-	tls  *options.TLSConfig
-
-	kubeClient *kubernetes.Clientset
-
-	allowPaths  []string
-	ignorePaths []string
 }
 
 func Complete(o *options.ProxyRunOptions) (*completedProxyRunOptions, error) {
@@ -201,7 +191,14 @@ func Run(cfg *completedProxyRunOptions) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	authenticator, err := permv2alpha1.UnionAllAuthenticators(ctx, cfg.auth.Authentication, cfg.kubeClient)
+	authnCfg := &permv2alpha1.AuthnConfig{
+		AuthnConfig: *cfg.auth.Authentication,
+		LLDAP: permv2alpha1.LLDAPConfig{
+			Server: cfg.lldapServer,
+			Port:   cfg.lldapPort,
+		},
+	}
+	authenticator, err := permv2alpha1.UnionAllAuthenticators(ctx, authnCfg, cfg.kubeClient)
 	if err != nil {
 		klog.Errorf("failed to create authenticator: %v", err)
 		return err
@@ -255,6 +252,7 @@ func Run(cfg *completedProxyRunOptions) error {
 
 		if !ignorePathFound {
 			handlerFunc := proxy.ServeHTTP
+			handlerFunc = permv2alpha1.WithUserHeader(handlerFunc)
 			handlerFunc = filters.WithAuthHeaders(cfg.auth.Authentication.Header, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthorization(authorizer, cfg.auth.Authorization, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthentication(authenticator, cfg.auth.Authentication.Token.Audiences, handlerFunc)
