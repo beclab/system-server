@@ -10,8 +10,21 @@ import (
 )
 
 func initTransport(upstreamCAPool *x509.CertPool, upstreamClientCertPath, upstreamClientKeyPath string) (http.RoundTripper, error) {
+	// http.Transport sourced from go 1.10.7
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 1800 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
 	if upstreamCAPool == nil {
-		return http.DefaultTransport, nil
+		return transport, nil
 	}
 
 	var certKeyPair tls.Certificate
@@ -23,21 +36,10 @@ func initTransport(upstreamCAPool *x509.CertPool, upstreamClientCertPath, upstre
 		}
 	}
 
-	// http.Transport sourced from go 1.10.7
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig: &tls.Config{
-			RootCAs: upstreamCAPool,
-		},
+	// add ssl options
+	transport.TLSHandshakeTimeout = 10 * time.Second
+	transport.TLSClientConfig = &tls.Config{
+		RootCAs: upstreamCAPool,
 	}
 
 	if certKeyPair.Certificate != nil {

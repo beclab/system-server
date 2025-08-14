@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
@@ -11,7 +12,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/apiserver/pkg/authorization/union"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	versionedinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -24,7 +25,7 @@ type nonResourceWithServiceRuleResolver struct {
 	clusterRoleBindingLister rbacregistryvalidation.ClusterRoleBindingLister
 }
 
-var _ authorizer.Authorizer = &nonResourceWithServiceRBACAuthorizor{}
+var _ Authorizer = &nonResourceWithServiceRBACAuthorizor{}
 
 type nonResourceWithServiceRBACAuthorizor struct {
 	resolver *nonResourceWithServiceRuleResolver
@@ -45,26 +46,38 @@ type authorizingVisitor struct {
 	allowed bool
 	reason  string
 	errors  []error
+	service string
 }
 
-func (v *authorizingVisitor) visit(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool {
-	if rule != nil && rbac.RuleAllows(v.requestAttributes, rule) {
-		v.allowed = true
-		v.reason = fmt.Sprintf("RBAC: allowed by %s", source.String())
+func (v *authorizingVisitor) visit(source fmt.Stringer, role *rbacv1.ClusterRole, rule *rbacv1.PolicyRule, err error) bool {
+	if rule != nil {
+		v.allowed = rbac.RuleAllows(v.requestAttributes, rule)
+		if v.allowed {
+			v.reason = fmt.Sprintf("RBAC: allowed by %s", source.String())
+			if service, ok := role.Annotations[providerv2alpha1.ProviderServiceAnnotation]; ok {
+				v.service = service
+			}
+			klog.V(5).Infof("RBAC: allowed by %s with service %q", source.String(), v.service)
+		} else {
+			v.reason = fmt.Sprintf("RBAC: denied by %s", source.String())
+		}
+
 		return false
 	}
+
+	// it's not a cluster role of a provider, we have no opinion
 	if err != nil {
 		v.errors = append(v.errors, err)
 	}
 	return true
 }
 
-func (r *nonResourceWithServiceRBACAuthorizor) Authorize(ctx context.Context, requestAttributes authorizer.Attributes) (authorizer.Decision, string, error) {
+func (r *nonResourceWithServiceRBACAuthorizor) Authorize(ctx context.Context, requestAttributes authorizer.Attributes) (string, authorizer.Decision, string, error) {
 	ruleCheckingVisitor := &authorizingVisitor{requestAttributes: requestAttributes}
 
 	r.resolver.VisitRulesFor(ctx, requestAttributes.GetUser(), requestAttributes.GetResource(), ruleCheckingVisitor.visit)
 	if ruleCheckingVisitor.allowed {
-		return authorizer.DecisionAllow, ruleCheckingVisitor.reason, nil
+		return ruleCheckingVisitor.service, authorizer.DecisionAllow, ruleCheckingVisitor.reason, nil
 	}
 
 	// Build a detailed log of the denial.
@@ -93,7 +106,7 @@ func (r *nonResourceWithServiceRBACAuthorizor) Authorize(ctx context.Context, re
 			}
 			operation = b.String()
 		} else {
-			operation = fmt.Sprintf("%q nonResourceURL %q", requestAttributes.GetVerb(), requestAttributes.GetPath())
+			operation = fmt.Sprintf("%q nonResourceURL %q provider %q", requestAttributes.GetVerb(), requestAttributes.GetPath(), requestAttributes.GetResource())
 		}
 
 		var scope string
@@ -110,12 +123,12 @@ func (r *nonResourceWithServiceRBACAuthorizor) Authorize(ctx context.Context, re
 	if len(ruleCheckingVisitor.errors) > 0 {
 		reason = fmt.Sprintf("RBAC: %v", utilerrors.NewAggregate(ruleCheckingVisitor.errors))
 	}
-	return authorizer.DecisionNoOpinion, reason, nil
+	return "", authorizer.DecisionNoOpinion, reason, nil
 }
 
-func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context, user user.Info, bindingProvider string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
+func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context, user user.Info, bindingProvider string, visitor func(source fmt.Stringer, role *rbacv1.ClusterRole, rule *rbacv1.PolicyRule, err error) bool) {
 	if clusterRoleBindings, err := rr.clusterRoleBindingLister.ListClusterRoleBindings(ctx); err != nil {
-		if !visitor(nil, nil, err) {
+		if !visitor(nil, nil, nil, err) {
 			return
 		}
 	} else {
@@ -125,9 +138,9 @@ func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context,
 			if !applies {
 				continue
 			}
-			rules, err := rr.GetRoleReferenceRules(ctx, clusterRoleBinding.RoleRef, bindingProvider)
+			role, rules, err := rr.GetRoleReferenceRules(ctx, clusterRoleBinding.RoleRef, bindingProvider)
 			if err != nil {
-				if !visitor(nil, nil, err) {
+				if !visitor(nil, nil, nil, err) {
 					return
 				}
 				continue
@@ -135,7 +148,7 @@ func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context,
 			sourceDescriber.binding = clusterRoleBinding
 			sourceDescriber.subject = &clusterRoleBinding.Subjects[subjectIndex]
 			for i := range rules {
-				if !visitor(sourceDescriber, &rules[i], nil) {
+				if !visitor(sourceDescriber, role, &rules[i], nil) {
 					return
 				}
 			}
@@ -144,26 +157,29 @@ func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context,
 }
 
 // GetRoleReferenceRules attempts to resolve the RoleBinding or ClusterRoleBinding.
-func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.Context, roleRef rbacv1.RoleRef, bindingProvider string) ([]rbacv1.PolicyRule, error) {
+func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.Context, roleRef rbacv1.RoleRef, bindingProvider string) (*rbacv1.ClusterRole, []rbacv1.PolicyRule, error) {
 	switch roleRef.Kind {
 	case "ClusterRole":
 		clusterRole, err := rr.clusterRoleGetter.GetClusterRole(ctx, roleRef.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		if annotation, ok := clusterRole.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok && annotation == bindingProvider {
-			return clusterRole.Rules, nil
+		if annotation, ok := clusterRole.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok {
+			klog.V(5).Info("it's a cluster role of a provider, annotation: ", annotation)
+			if annotation == bindingProvider {
+				return clusterRole, clusterRole.Rules, nil
+			}
 		}
 
-		return nil, fmt.Errorf("cluster role %q does not match binding provider %q", roleRef.Name, bindingProvider)
+		return nil, nil, fmt.Errorf("[nonResourceWithServiceRuleResolver] cluster role %q does not match binding provider %q", roleRef.Name, bindingProvider)
 
 	default:
-		return nil, fmt.Errorf("unsupported role reference kind: %q", roleRef.Kind)
+		return nil, nil, fmt.Errorf("[nonResourceWithServiceRuleResolver] unsupported role reference kind: %q", roleRef.Kind)
 	}
 }
 
-func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kubernetes.Interface) (authorizer.Authorizer, error) {
+func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kubernetes.Interface) (Authorizer, error) {
 	sarClient := kubeClient.AuthorizationV1()
 	sarAuthorizer, err := authz.NewSarAuthorizer(sarClient)
 	if err != nil {
@@ -184,11 +200,69 @@ func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kube
 		informerFactory.Shutdown()
 	}()
 
-	authorizer := union.New(
-		staticAuthorizer,
+	authorizer := unionAuthzHandler{
+		wrapAuthorizer{staticAuthorizer},
 		nonResourceWithServiceRBACAuthorizor,
-		sarAuthorizer,
-	)
+		wrapAuthorizer{sarAuthorizer},
+	}
 
 	return authorizer, nil
+}
+
+type key struct{}
+
+var providerServiceKey = key{}
+
+func WithProviderService(parent context.Context, service string) context.Context {
+	return request.WithValue(parent, providerServiceKey, service)
+}
+
+func ProviderServiceFrom(ctx context.Context) (string, bool) {
+	service, ok := ctx.Value(providerServiceKey).(string)
+	if !ok {
+		return "", false
+	}
+	return service, true
+}
+
+type Authorizer interface {
+	Authorize(ctx context.Context, a authorizer.Attributes) (service string, authorized authorizer.Decision, reason string, err error)
+}
+
+type unionAuthzHandler []Authorizer
+
+// Authorizes against a chain of authorizer.Authorizer objects and returns nil if successful and returns error if unsuccessful
+func (authzHandler unionAuthzHandler) Authorize(ctx context.Context, a authorizer.Attributes) (string, authorizer.Decision, string, error) {
+	var (
+		errlist    []error
+		reasonlist []string
+	)
+
+	for _, currAuthzHandler := range authzHandler {
+		service, decision, reason, err := currAuthzHandler.Authorize(ctx, a)
+
+		if err != nil {
+			errlist = append(errlist, err)
+		}
+		if len(reason) != 0 {
+			reasonlist = append(reasonlist, reason)
+		}
+		switch decision {
+		case authorizer.DecisionAllow, authorizer.DecisionDeny:
+			return service, decision, reason, err
+		case authorizer.DecisionNoOpinion:
+			// continue to the next authorizer
+		}
+	}
+
+	return "", authorizer.DecisionNoOpinion, strings.Join(reasonlist, "\n"), utilerrors.NewAggregate(errlist)
+}
+
+type wrapAuthorizer struct {
+	authorizer authorizer.Authorizer
+}
+
+func (t wrapAuthorizer) Authorize(ctx context.Context, a authorizer.Attributes) (service string, authorized authorizer.Decision, reason string, err error) {
+	authorized, reason, err = t.authorizer.Authorize(ctx, a)
+	return
 }

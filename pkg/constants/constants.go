@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	APIServerListenAddress    = ":80"
+	ProxyServerListenAddress  = ":28080"
+	APIServerListenAddress    = ":84"
 	KubeSphereClientAttribute = "ksclient"
 	AuthorizationTokenKey     = "X-Authorization"
 	BflUserKey                = "X-BFL-USER"

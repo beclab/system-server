@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
+	"bytetrade.io/web3os/system-server/pkg/constants"
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
 	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
@@ -44,7 +46,7 @@ func WithAuthentication(
 }
 
 func WithAuthorization(
-	authz authorizer.Authorizer,
+	authz Authorizer,
 	cfg *authz.Config,
 	handler http.HandlerFunc,
 ) http.HandlerFunc {
@@ -63,7 +65,11 @@ func WithAuthorization(
 					return nil
 				}
 				hostStr := requestUrl.Host
-				ref := providerv2alpha1.ProviderRefFromHost(hostStr)
+				if hostStr == "" {
+					hostStr = r.Host
+				}
+				klog.V(5).Infof("RBAC: using provider host %q, url: %q", hostStr, uri)
+				ref := providerv2alpha1.ProviderRefFromHost(strings.Split(hostStr, ":")[0])
 
 				a := authorizer.AttributesRecord{
 					User:            attrs.GetUser(),
@@ -100,21 +106,58 @@ func WithAuthorization(
 			return
 		}
 
+		var service string
 		for _, attrs := range allAttrs {
 			// Authorize
-			authorized, reason, err := authz.Authorize(req.Context(), attrs)
+			s, authorized, reason, err := authz.Authorize(req.Context(), attrs)
 			if err != nil {
 				msg := fmt.Sprintf("Authorization error (user=%s, verb=%s, resource=%s, subresource=%s)", u.GetName(), attrs.GetVerb(), attrs.GetResource(), attrs.GetSubresource())
 				klog.Errorf("%s: %s", msg, err)
 				http.Error(w, msg, http.StatusInternalServerError)
 				return
 			}
+			klog.V(5).Infof("Authorization result, %d, reason=%s", authorized, reason)
 			if authorized != authorizer.DecisionAllow {
 				msg := fmt.Sprintf("Forbidden (user=%s, verb=%s, resource=%s, subresource=%s)", u.GetName(), attrs.GetVerb(), attrs.GetResource(), attrs.GetSubresource())
 				klog.V(2).Infof("%s. Reason: %q.", msg, reason)
 				http.Error(w, msg, http.StatusForbidden)
 				return
 			}
+
+			if s != "" {
+				service = s
+			}
+		}
+
+		if service != "" {
+			req = req.WithContext(WithProviderService(req.Context(), service))
+		}
+
+		handler.ServeHTTP(w, req)
+	}
+}
+
+func WithUserHeader(
+	handler http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		u, ok := request.UserFrom(req.Context())
+		if ok {
+			req.Header.Set(constants.BflUserKey, u.GetName())
+		}
+
+		handler.ServeHTTP(w, req)
+	}
+}
+
+func MustHaveProviderService(
+	handler http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		_, ok := ProviderServiceFrom(req.Context())
+		if !ok {
+			http.Error(w, "provider service not found", http.StatusBadRequest)
+			return
 		}
 
 		handler.ServeHTTP(w, req)
