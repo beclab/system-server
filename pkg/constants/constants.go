@@ -2,6 +2,7 @@ package constants
 
 import (
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -18,6 +19,7 @@ const (
 var (
 	MyNamespace string
 	Owner       string
+	MyUserspace string
 )
 
 var (
@@ -27,4 +29,5 @@ var (
 func init() {
 	MyNamespace = os.Getenv("MY_NAMESPACE")
 	Owner = os.Getenv("OWNER")
+	MyUserspace = strings.Replace(MyNamespace, "user-system-", "user-space-", 1)
 }

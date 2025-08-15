@@ -76,7 +76,7 @@ func NewRBACProxyServer(ctx context.Context) *server {
 	return s
 }
 
-func (s *server) Start(cfg *completedProxyRunOptions) error {
+func (s *server) Init(cfg *completedProxyRunOptions) error {
 	var err error
 	authnCfg := &permv2alpha1.AuthnConfig{
 		AuthnConfig: *cfg.auth.Authentication,
@@ -112,6 +112,10 @@ func (s *server) Start(cfg *completedProxyRunOptions) error {
 	config.Transport = transport
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
+	return nil
+}
+
+func (s *server) Start(cfg *completedProxyRunOptions) error {
 	klog.Info("starting proxy server for system-server,", "listen on ", cfg.insecureListenAddress)
 	return s.proxy.Start(cfg.insecureListenAddress)
 }
@@ -130,6 +134,8 @@ func (s *server) rbac(cfg *completedProxyRunOptions) func(next echo.HandlerFunc)
 
 				err = next(c)
 			}
+
+			handlerFunc = permv2alpha1.RecoverHeader(handlerFunc)
 			handlerFunc = permv2alpha1.MustHaveProviderService(handlerFunc)
 			handlerFunc = permv2alpha1.WithUserHeader(handlerFunc)
 			handlerFunc = filters.WithAuthHeaders(cfg.auth.Authentication.Header, handlerFunc)
@@ -140,6 +146,10 @@ func (s *server) rbac(cfg *completedProxyRunOptions) func(next echo.HandlerFunc)
 			return err
 		}
 	}
+}
+
+func (s *server) Authenticator() authenticator.Request {
+	return s.authenticator
 }
 
 func ServerOptions(listenAddress string) *completedProxyRunOptions {

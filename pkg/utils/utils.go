@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"k8s.io/klog/v2"
 )
@@ -34,4 +35,35 @@ func GetEnvOrDefault(env string, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func IsServiceAccount(name string) (isSA bool, namespace string, saName string) {
+	isSA = strings.HasPrefix(name, "system:serviceaccount:")
+	if isSA {
+		parts := strings.SplitN(name, ":", 4)
+		if len(parts) == 4 {
+			return true, parts[2], parts[3]
+		}
+	}
+	return false, "", ""
+}
+
+func IsUserSystemNamespace(namespace string) (bool, string) {
+	usersystemPrefix := "user-system-"
+	return strings.HasPrefix(namespace, usersystemPrefix), strings.TrimPrefix(namespace, usersystemPrefix)
+}
+
+func IsUserSpaceNamespace(namespace string) (bool, string) {
+	userspacerefix := "user-space-"
+	return strings.HasPrefix(namespace, userspacerefix), strings.TrimPrefix(namespace, userspacerefix)
+}
+
+func IsUserNamespace(namespace string) (bool, string) {
+	if isUserSystem, userName := IsUserSystemNamespace(namespace); isUserSystem {
+		return true, userName
+	}
+	if isUserSpace, userName := IsUserSpaceNamespace(namespace); isUserSpace {
+		return true, userName
+	}
+	return false, ""
 }
