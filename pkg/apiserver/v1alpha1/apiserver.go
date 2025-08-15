@@ -9,6 +9,7 @@ import (
 	sysclientset "bytetrade.io/web3os/system-server/pkg/generated/clientset/versioned"
 	"bytetrade.io/web3os/system-server/pkg/generated/listers/sys/v1alpha1"
 	permission "bytetrade.io/web3os/system-server/pkg/permission/v1alpha1"
+	permissionv2alpha1 "bytetrade.io/web3os/system-server/pkg/permission/v2alpha1"
 	prodiverregistry "bytetrade.io/web3os/system-server/pkg/providerregistry/v1alpha1"
 	proxyv2alpha1 "bytetrade.io/web3os/system-server/pkg/serviceproxy/v2alpha1"
 
@@ -20,7 +21,8 @@ import (
 
 // APIServer represents an API server for system.
 type APIServer struct {
-	Server *http.Server
+	Server   *http.Server
+	preStart func()
 
 	// RESTful Server
 	container *restful.Container
@@ -52,6 +54,14 @@ func (s *APIServer) PrepareRun(
 	permissionLister v1alpha1.ApplicationPermissionLister,
 	providerLister v1alpha1.ProviderRegistryLister,
 ) error {
+
+	proxyCfg := proxyv2alpha1.ServerOptions(constants.ProxyServerListenAddress)
+	proxy := proxyv2alpha1.NewRBACProxyServer(s.serverCtx)
+	if err := proxy.Init(proxyCfg); err != nil {
+		klog.Errorf("failed to initialize proxy: %v", err)
+		return err
+	}
+
 	s.container.Filter(logRequestAndResponse)
 	s.container.Router(restful.CurlyRouter{})
 	s.container.RecoverHandler(func(panicReason interface{}, httpWriter http.ResponseWriter) {
@@ -71,7 +81,14 @@ func (s *APIServer) PrepareRun(
 	// utilruntime.Must(legacy.AddLegacyAPIToContainer(s.container, registry))
 	// utilruntime.Must(legacy.AddLegacyAPIV2ToContainer(s.container, registry))
 
+	utilruntime.Must(permissionv2alpha1.AddPermissionControlToContainer(s.container, proxy.Authenticator(), kubeconfig))
 	s.Server.Handler = s.container
+
+	s.preStart = func() {
+		go func() {
+			utilruntime.Must(proxy.Start(proxyCfg))
+		}()
+	}
 
 	return nil
 }
@@ -90,10 +107,9 @@ func (s *APIServer) Run() error {
 		klog.Info("shutdown apiserver for system-server")
 	}()
 
-	proxy := proxyv2alpha1.NewRBACProxyServer(s.serverCtx)
-	go func() {
-		utilruntime.Must(proxy.Start(proxyv2alpha1.ServerOptions(constants.ProxyServerListenAddress)))
-	}()
+	if s.preStart != nil {
+		s.preStart()
+	}
 
 	klog.Info("starting apiserver for system-server,", "listen on ", constants.APIServerListenAddress)
 	return s.Server.ListenAndServe()

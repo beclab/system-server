@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	apiv1alpha1 "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	"bytetrade.io/web3os/system-server/pkg/constants"
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
@@ -144,6 +145,7 @@ func WithUserHeader(
 		u, ok := request.UserFrom(req.Context())
 		if ok {
 			req.Header.Set(constants.BflUserKey, u.GetName())
+			req.Header.Set(apiv1alpha1.BackendTokenHeader, constants.Nonce)
 		}
 
 		handler.ServeHTTP(w, req)
@@ -158,6 +160,24 @@ func MustHaveProviderService(
 		if !ok {
 			http.Error(w, "provider service not found", http.StatusBadRequest)
 			return
+		}
+
+		handler.ServeHTTP(w, req)
+	}
+}
+
+func RecoverHeader(
+	handler http.HandlerFunc,
+) http.HandlerFunc {
+	recoverHeaders := map[string]string{
+		"Temp-Authorization": "Authorization",
+	}
+	return func(w http.ResponseWriter, req *http.Request) {
+		for tempHeader, originalHeader := range recoverHeaders {
+			if val := req.Header.Get(tempHeader); val != "" {
+				req.Header.Set(originalHeader, val)
+				req.Header.Del(tempHeader)
+			}
 		}
 
 		handler.ServeHTTP(w, req)

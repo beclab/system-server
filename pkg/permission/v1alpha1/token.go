@@ -3,18 +3,11 @@ package permission
 import (
 	"context"
 	"fmt"
-	
+
 	"github.com/dgrijalva/jwt-go"
-	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-)
-
-const (
-	KubeSphereNamespace        = "kubesphere-system"
-	KubeSphereConfigName       = "kubesphere-config"
-	KubeSphereConfigMapDataKey = "kubesphere.yaml"
 )
 
 type Options struct {
@@ -55,31 +48,6 @@ type Claims struct {
 	Locale string `json:"locale,omitempty"`
 	// Shorthand name by which the End-User wishes to be referred to at the RP,
 	PreferredUsername string `json:"preferred_username,omitempty"`
-}
-
-func getKubersphereConfig(ctx context.Context, kubeconfig *rest.Config) (*Config, error) {
-	k8s, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, err
-	}
-
-	ksConfig, err := k8s.
-		CoreV1().ConfigMaps(KubeSphereNamespace).
-		Get(ctx, KubeSphereConfigName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	c := &Config{}
-	value, ok := ksConfig.Data[KubeSphereConfigMapDataKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to get configmap kubesphere.yaml value")
-	}
-
-	if err := yaml.Unmarshal([]byte(value), c); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal value from configmap. err: %s", err)
-	}
-	return c, nil
 }
 
 func validateToken(ctx context.Context, kubeConfig *rest.Config, tokenString string) (string, error) {
