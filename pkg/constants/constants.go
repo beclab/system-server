@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	ProxyServerServiceName    = "system-server"
 	ProxyServerListenAddress  = ":28080"
 	APIServerListenAddress    = ":84"
 	KubeSphereClientAttribute = "ksclient"

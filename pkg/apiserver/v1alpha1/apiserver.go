@@ -11,6 +11,7 @@ import (
 	permission "bytetrade.io/web3os/system-server/pkg/permission/v1alpha1"
 	permissionv2alpha1 "bytetrade.io/web3os/system-server/pkg/permission/v2alpha1"
 	prodiverregistry "bytetrade.io/web3os/system-server/pkg/providerregistry/v1alpha1"
+	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
 	proxyv2alpha1 "bytetrade.io/web3os/system-server/pkg/serviceproxy/v2alpha1"
 
 	"github.com/emicklei/go-restful/v3"
@@ -81,7 +82,8 @@ func (s *APIServer) PrepareRun(
 	// utilruntime.Must(legacy.AddLegacyAPIToContainer(s.container, registry))
 	// utilruntime.Must(legacy.AddLegacyAPIV2ToContainer(s.container, registry))
 
-	utilruntime.Must(permissionv2alpha1.AddPermissionControlToContainer(s.container, proxy.Authenticator(), kubeconfig))
+	utilruntime.Must(permissionv2alpha1.AddPermissionControlToContainer(s.container, permissionv2alpha1.Auth(proxy.Authenticator()), kubeconfig))
+	utilruntime.Must(providerv2alpha1.AddProviderRegistryToContainer(s.container, permissionv2alpha1.Auth(proxy.Authenticator()), kubeconfig))
 	s.Server.Handler = s.container
 
 	s.preStart = func() {

@@ -12,15 +12,16 @@ import (
 )
 
 var (
-	MODULE_TAGS  = []string{"permission-control"}
-	MODULE_ROUTE = "/permission/v2alpha1"
+	MODULE_TAGS  = []string{"provider-registry"}
+	MODULE_ROUTE = "/provider/v2alpha1"
 )
 
-func AddPermissionControlToContainer(
+func AddProviderRegistryToContainer(
 	c *restful.Container,
 	requireAuth func(f restful.RouteFunction) restful.RouteFunction,
 	kubeconfig *rest.Config,
 ) error {
+
 	client := kubernetes.NewForConfigOrDie(kubeconfig)
 	handler := &handler{BaseHandler: &apitools.BaseHandler{}, kubeClient: client}
 	ws := newWebService()
@@ -29,7 +30,7 @@ func AddPermissionControlToContainer(
 		To(requireAuth(handler.register)).
 		Doc("register an app provider binding").
 		Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
-		Returns(http.StatusOK, "Success to register a invoker", &RegisterResp{}))
+		Returns(http.StatusOK, "Success to register a invoker", &response.Response{}))
 
 	ws.Route(ws.POST("/unregister").
 		To(requireAuth(handler.unregister)).
@@ -38,7 +39,6 @@ func AddPermissionControlToContainer(
 		Returns(http.StatusOK, "Success to unregister a invoker", &response.Response{}))
 
 	c.Add(ws)
-
 	return nil
 }
 
