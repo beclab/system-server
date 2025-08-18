@@ -3,28 +3,14 @@ package v2alpha1
 import (
 	"context"
 	"fmt"
-	"net/http"
 
-	"bytetrade.io/web3os/system-server/pkg/constants"
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
-	"github.com/emicklei/go-restful/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
-func (h *handler) getUser(req *restful.Request, resp *restful.Response) (string, error) {
-	user := req.Request.Header.Get(constants.BflUserKey)
-	if user == "" {
-		err := restful.NewError(http.StatusUnauthorized, "User not found in request header")
-		klog.Error(err)
-		return "", err
-	}
-
-	return user, nil
-}
-
-func (h *handler) getProvider(ctx context.Context, user string, providerName string) ([]*rbacv1.ClusterRole, error) {
+func (h *handler) getProvider(ctx context.Context, user string, providerAppName, providerAppId, providerAppNamespace string) ([]*rbacv1.ClusterRole, error) {
 	clusterRoles, err := h.kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("Failed to list cluster roles: %v", err)
@@ -34,7 +20,11 @@ func (h *handler) getProvider(ctx context.Context, user string, providerName str
 	var roles []*rbacv1.ClusterRole
 	for _, role := range clusterRoles.Items {
 		if providerRef, ok := role.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok {
-			if providerRef == h.userProviderRef(user, providerName) {
+			switch {
+			case
+				providerRef == h.userProviderRef(user, providerAppName),
+				providerRef == h.appProviderRef(providerAppNamespace, providerAppName),
+				providerRef == h.appDomainProviderRef(user, providerAppId):
 				klog.Infof("Found provider role: %s for user: %s", role.Name, user)
 				roles = append(roles, &role)
 			}
@@ -101,6 +91,14 @@ func (h *handler) unbindingProvider(ctx context.Context, user, app, serviceAccou
 
 func (h *handler) userProviderRef(user, providerName string) string {
 	return fmt.Sprintf("user-system-%s/%s", user, providerName)
+}
+
+func (h *handler) appDomainProviderRef(user, providerAppId string) string {
+	return fmt.Sprintf("%s/%s", user, providerAppId)
+}
+
+func (h *handler) appProviderRef(providerAppName, providerAppNamespace string) string {
+	return fmt.Sprintf("%s/%s", providerAppNamespace, providerAppName)
 }
 
 func (h *handler) getProviderBindingName(appNamespace, serviceAccount, roleName string) string {

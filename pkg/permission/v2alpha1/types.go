@@ -4,8 +4,9 @@ type RegisterResp struct {
 }
 
 type PermissionRequire struct {
-	ProviderName   string  `json:"provider_name"`
-	ServiceAccount *string `json:"service_account,omitempty"`
+	ProviderName      string  `json:"provider_name"`
+	ProviderNamespace string  `json:"provider_namespace"`
+	ServiceAccount    *string `json:"service_account,omitempty"`
 }
 
 type PermissionRegister struct {

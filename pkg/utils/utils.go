@@ -2,6 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
@@ -66,4 +68,10 @@ func IsUserNamespace(namespace string) (bool, string) {
 		return true, userName
 	}
 	return false, ""
+}
+
+func Md5String(s string) string {
+	hash := md5.Sum([]byte(s))
+	hashString := hex.EncodeToString(hash[:])
+	return hashString
 }
