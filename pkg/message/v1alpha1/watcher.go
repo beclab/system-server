@@ -58,7 +58,7 @@ func (e *EventWatcher) DoWatch(event *Event) error {
 		},
 	}
 
-	notificationServiceUrl := fmt.Sprintf("http://notifications-service.%s/notification/system/push", strings.Replace(constants.MyNamespace, "user-system-", "user-space-", 1))
+	notificationServiceUrl := fmt.Sprintf("http://notifications-server.%s/notification/system/push", strings.Replace(constants.MyNamespace, "user-system-", "user-space-", 1))
 
 	var buf bytes.Buffer
 	err = json.NewEncoder(&buf).Encode(alert)
