@@ -7,6 +7,7 @@ import (
 	"github.com/brancz/kube-rbac-proxy/cmd/kube-rbac-proxy/app/options"
 	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
 	"golang.org/x/net/http2"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -31,4 +32,6 @@ type completedProxyRunOptions struct {
 	ignorePaths []string
 	lldapServer string
 	lldapPort   int
+
+	informerFactory informers.SharedInformerFactory
 }

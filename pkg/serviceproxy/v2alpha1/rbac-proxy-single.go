@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -184,6 +185,8 @@ func Complete(o *options.ProxyRunOptions) (*completedProxyRunOptions, error) {
 		MaxUploadBufferPerConnection: int32(o.HTTP2MaxSize) * int32(o.HTTP2MaxConcurrentStreams),
 	}
 
+	completed.informerFactory = informers.NewSharedInformerFactory(completed.kubeClient, 0)
+
 	return completed, nil
 }
 
@@ -233,6 +236,8 @@ func Run(cfg *completedProxyRunOptions) error {
 		}
 	}
 
+	namespaceLister := cfg.informerFactory.Core().V1().Namespaces().Lister()
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ignorePathFound := false
 		for _, pathIgnored := range cfg.ignorePaths {
@@ -252,7 +257,7 @@ func Run(cfg *completedProxyRunOptions) error {
 
 		if !ignorePathFound {
 			handlerFunc := proxy.ServeHTTP
-			handlerFunc = permv2alpha1.WithUserHeader(handlerFunc)
+			handlerFunc = permv2alpha1.WithUserHeader(permv2alpha1.UserFromServiceAccount(namespaceLister), handlerFunc)
 			handlerFunc = filters.WithAuthHeaders(cfg.auth.Authentication.Header, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthorization(authorizer, cfg.auth.Authorization, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthentication(authenticator, cfg.auth.Authentication.Token.Audiences, handlerFunc)
@@ -454,6 +459,7 @@ func Run(cfg *completedProxyRunOptions) error {
 		return fmt.Errorf("failed to run groups: %w", err)
 	}
 
+	cfg.informerFactory.Start(ctx.Done())
 	return nil
 }
 
