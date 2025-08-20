@@ -93,7 +93,7 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 		return err
 	}
 
-	s.authorizer, err = permv2alpha1.UnionAllAuthorizers(s.mainCtx, cfg.auth.Authorization, cfg.kubeClient)
+	s.authorizer, err = permv2alpha1.UnionAllAuthorizers(s.mainCtx, cfg.auth.Authorization, cfg.kubeClient, cfg.informerFactory)
 	if err != nil {
 		klog.Errorf("failed to create authorizer: %v", err)
 		return err
@@ -114,6 +114,10 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
 	cfg.informerFactory.Start(s.mainCtx.Done())
+	go func() {
+		<-s.mainCtx.Done()
+		cfg.informerFactory.Shutdown()
+	}()
 	return nil
 }
 

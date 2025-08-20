@@ -179,7 +179,7 @@ func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.
 	}
 }
 
-func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kubernetes.Interface) (Authorizer, error) {
+func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kubernetes.Interface, informerFactory versionedinformers.SharedInformerFactory) (Authorizer, error) {
 	sarClient := kubeClient.AuthorizationV1()
 	sarAuthorizer, err := authz.NewSarAuthorizer(sarClient)
 	if err != nil {
@@ -191,14 +191,7 @@ func UnionAllAuthorizers(ctx context.Context, cfg *authz.Config, kubeClient kube
 		return nil, fmt.Errorf("failed to create static authorizer: %w", err)
 	}
 
-	informerFactory := versionedinformers.NewSharedInformerFactory(kubeClient, 0)
 	nonResourceWithServiceRBACAuthorizor := newNonResourceWithServiceRBACAuthorizor(informerFactory)
-
-	informerFactory.Start(ctx.Done())
-	go func() {
-		<-ctx.Done()
-		informerFactory.Shutdown()
-	}()
 
 	authorizer := unionAuthzHandler{
 		wrapAuthorizer{staticAuthorizer},

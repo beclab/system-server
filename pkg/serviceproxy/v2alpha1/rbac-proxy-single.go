@@ -207,7 +207,7 @@ func Run(cfg *completedProxyRunOptions) error {
 		return err
 	}
 
-	authorizer, err := permv2alpha1.UnionAllAuthorizers(ctx, cfg.auth.Authorization, cfg.kubeClient)
+	authorizer, err := permv2alpha1.UnionAllAuthorizers(ctx, cfg.auth.Authorization, cfg.kubeClient, cfg.informerFactory)
 	if err != nil {
 		klog.Errorf("failed to create authorizer: %v", err)
 		return err
@@ -455,11 +455,13 @@ func Run(cfg *completedProxyRunOptions) error {
 		return fmt.Errorf("no listen address provided")
 	}
 
+	cfg.informerFactory.Start(ctx.Done())
+	defer cfg.informerFactory.Shutdown()
+
 	if err := gr.Run(); err != nil {
 		return fmt.Errorf("failed to run groups: %w", err)
 	}
 
-	cfg.informerFactory.Start(ctx.Done())
 	return nil
 }
 
