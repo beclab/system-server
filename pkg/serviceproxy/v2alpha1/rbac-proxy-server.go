@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -112,6 +113,7 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 	config.Transport = transport
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
+	cfg.informerFactory.Start(s.mainCtx.Done())
 	return nil
 }
 
@@ -121,6 +123,7 @@ func (s *server) Start(cfg *completedProxyRunOptions) error {
 }
 
 func (s *server) rbac(cfg *completedProxyRunOptions) func(next echo.HandlerFunc) echo.HandlerFunc {
+	namespaceLister := cfg.informerFactory.Core().V1().Namespaces().Lister()
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -137,7 +140,7 @@ func (s *server) rbac(cfg *completedProxyRunOptions) func(next echo.HandlerFunc)
 
 			handlerFunc = permv2alpha1.RecoverHeader(handlerFunc)
 			handlerFunc = permv2alpha1.MustHaveProviderService(handlerFunc)
-			handlerFunc = permv2alpha1.WithUserHeader(handlerFunc)
+			handlerFunc = permv2alpha1.WithUserHeader(permv2alpha1.UserFromServiceAccount(namespaceLister), handlerFunc)
 			handlerFunc = filters.WithAuthHeaders(cfg.auth.Authentication.Header, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthorization(s.authorizer, cfg.auth.Authorization, handlerFunc)
 			handlerFunc = permv2alpha1.WithAuthentication(s.authenticator, cfg.auth.Authentication.Token.Audiences, handlerFunc)
@@ -182,6 +185,8 @@ func ServerOptions(listenAddress string) *completedProxyRunOptions {
 		klog.Errorf("failed to parse LLDAP_PORT: %v", err)
 		completed.lldapPort = 17170 // default value
 	}
+
+	completed.informerFactory = informers.NewSharedInformerFactory(completed.kubeClient, 0)
 
 	return completed
 }

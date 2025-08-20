@@ -9,12 +9,15 @@ import (
 	apiv1alpha1 "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	"bytetrade.io/web3os/system-server/pkg/constants"
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
+	"bytetrade.io/web3os/system-server/pkg/utils"
 	"github.com/brancz/kube-rbac-proxy/pkg/authz"
 	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	corev1 "k8s.io/client-go/listers/core/v1"
+
 	"k8s.io/klog/v2"
 )
 
@@ -139,12 +142,17 @@ func WithAuthorization(
 }
 
 func WithUserHeader(
+	convert func(account string) string,
 	handler http.HandlerFunc,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		u, ok := request.UserFrom(req.Context())
 		if ok {
-			req.Header.Set(constants.BflUserKey, u.GetName())
+			user := u.GetName()
+			if convert != nil {
+				user = convert(user)
+			}
+			req.Header.Set(constants.BflUserKey, user)
 			req.Header.Set(apiv1alpha1.BackendTokenHeader, constants.Nonce)
 		}
 
@@ -181,5 +189,28 @@ func RecoverHeader(
 		}
 
 		handler.ServeHTTP(w, req)
+	}
+}
+
+func UserFromServiceAccount(namespaceLister corev1.NamespaceLister) func(string) string {
+	return func(sa string) string {
+		if isSA, saNamespace, _ := utils.IsServiceAccount(sa); isSA {
+			if isUserNamespace, username := utils.IsUserNamespace(saNamespace); isUserNamespace {
+				return username
+			} // end of service account check
+
+			// if not a user namespace, we should get owner from namespace
+			ns, err := namespaceLister.Get(saNamespace)
+			if err != nil {
+				klog.Errorf("failed to get namespace %s: %v", saNamespace, err)
+				return sa // return original service account if namespace not found
+			}
+
+			if owner, ok := ns.Labels["bytetrade.io/ns-owner"]; ok {
+				return owner
+			}
+		}
+
+		return sa
 	}
 }

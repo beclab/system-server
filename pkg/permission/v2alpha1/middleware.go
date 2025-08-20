@@ -14,7 +14,7 @@ func Auth(authenticator authenticator.Request) func(f restful.RouteFunction) res
 				f(req, resp)
 			}
 
-			handlerFunc = WithUserHeader(handlerFunc)
+			handlerFunc = WithUserHeader(nil, handlerFunc)
 			handlerFunc = WithAuthentication(authenticator, nil, handlerFunc)
 
 			handlerFunc(resp, req.Request)
