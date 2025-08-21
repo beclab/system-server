@@ -10,7 +10,6 @@ import (
 	"bytetrade.io/web3os/system-server/pkg/generated/listers/sys/v1alpha1"
 	permission "bytetrade.io/web3os/system-server/pkg/permission/v1alpha1"
 	permissionv2alpha1 "bytetrade.io/web3os/system-server/pkg/permission/v2alpha1"
-	prodiverregistry "bytetrade.io/web3os/system-server/pkg/providerregistry/v1alpha1"
 	providerv2alpha1 "bytetrade.io/web3os/system-server/pkg/providerregistry/v2alpha1"
 	proxyv2alpha1 "bytetrade.io/web3os/system-server/pkg/serviceproxy/v2alpha1"
 
@@ -29,7 +28,6 @@ type APIServer struct {
 	container *restful.Container
 
 	serverCtx context.Context
-	// dbOperator *db.DbOperator
 }
 
 // New constructs a new APIServer.
@@ -38,13 +36,10 @@ func New(ctx context.Context) (*APIServer, error) {
 		Addr: constants.APIServerListenAddress,
 	}
 
-	// operator := db.NewDbOperator()
-
 	return &APIServer{
 		Server:    server,
 		container: restful.NewContainer(),
 		serverCtx: ctx,
-		// dbOperator: operator,
 	}, nil
 }
 
@@ -69,19 +64,14 @@ func (s *APIServer) PrepareRun(
 		logStackOnRecover(panicReason, httpWriter)
 	})
 
-	registry := prodiverregistry.NewRegistry(sysclientset, providerLister)
+	// registry := prodiverregistry.NewRegistry(sysclientset, providerLister)
 	ctrlSet := permission.PermissionControlSet{
 		Ctrl: permission.NewPermissionControl(sysclientset, permissionLister),
 		Mgr:  permission.NewAccessManager(),
 	}
 
 	// use the server context for goroutine in background
-	utilruntime.Must(addServiceToContainer(s.serverCtx, s.container, kubeconfig, registry, &ctrlSet))
-	// utilruntime.Must(message.AddMessageDispatcherToContainer(s.serverCtx, sysclientset, s.container, s.dbOperator, &ctrlSet))
 	utilruntime.Must(permission.AddPermissionControlToContainer(s.container, &ctrlSet, kubeconfig))
-	// utilruntime.Must(legacy.AddLegacyAPIToContainer(s.container, registry))
-	// utilruntime.Must(legacy.AddLegacyAPIV2ToContainer(s.container, registry))
-
 	utilruntime.Must(permissionv2alpha1.AddPermissionControlToContainer(s.container, permissionv2alpha1.Auth(proxy.Authenticator()), kubeconfig))
 	utilruntime.Must(providerv2alpha1.AddProviderRegistryToContainer(s.container, permissionv2alpha1.Auth(proxy.Authenticator()), kubeconfig))
 	s.Server.Handler = s.container
@@ -100,7 +90,6 @@ func (s *APIServer) Run() error {
 	shutdownCtx, cancel := context.WithTimeout(s.serverCtx, 2*time.Minute)
 	defer func() {
 		cancel()
-		// s.dbOperator.Close()
 	}()
 
 	go func() {
