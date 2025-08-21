@@ -15,8 +15,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (h *handler) createRefForProvider(ctx context.Context, appName, appNamespace string, provider Provider) error {
-	providerRefs, err := h.getProviderRefs(appName, appNamespace, provider)
+func (h *handler) createRefForProvider(ctx context.Context, appName, appNamespace string, provider *Provider) error {
+	providerRefs, err := h.getProviderRefs(appNamespace, provider)
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -38,7 +38,7 @@ func (h *handler) createRefForProvider(ctx context.Context, appName, appNamespac
 	return err
 }
 
-func (h *handler) createCusterRoleForRef(ctx context.Context, ref string, provider Provider) error {
+func (h *handler) createCusterRoleForRef(ctx context.Context, ref string, provider *Provider) error {
 	// Create a ClusterRole for the provider reference
 	klog.Info("Creating ClusterRole for provider reference, ", ref, ", provider: ", provider.Paths)
 
@@ -124,8 +124,8 @@ func (h *handler) createServiceForProviderProxy(ctx context.Context, providerNam
 	return nil
 }
 
-func (h *handler) deleteRefForProvider(ctx context.Context, appName, appNamespace string, provider Provider) error {
-	providerRefs, err := h.getProviderRefs(appName, appNamespace, provider)
+func (h *handler) deleteRefForProvider(ctx context.Context, appName, appNamespace string, provider *Provider) error {
+	providerRefs, err := h.getProviderRefs(appNamespace, provider)
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -167,15 +167,12 @@ func (h *handler) deleteCusterRoleForRef(ctx context.Context, ref string) error 
 }
 
 func (h *handler) getRoleNameForRef(ref string) string {
-	roleName := strings.Join(strings.Split(ref, "/"), ":")
-	klog.Info("Getting role name for provider reference, ", ref, ", role name: ", roleName)
-	return roleName
+	return GetRoleNameForRef(ref)
 }
 
-func (h *handler) getProviderRefs(appName, appNamespace string, provider Provider) ([]string, error) {
+func (h *handler) getProviderRefs(appNamespace string, provider *Provider) ([]string, error) {
 	providerRefs := []string{
-		ProviderRefName(appName, constants.MyNamespace), // default provider ref, the system-server proxy
-		ProviderRefName(appName, appNamespace),
+		ProviderRefName(provider.Name, appNamespace),
 	}
 	if provider.Domain != "" {
 		strToken := strings.Split(provider.Domain, ".")

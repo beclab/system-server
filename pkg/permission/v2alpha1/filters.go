@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	apiv1alpha1 "bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	"bytetrade.io/web3os/system-server/pkg/constants"
@@ -73,7 +72,7 @@ func WithAuthorization(
 					hostStr = r.Host
 				}
 				klog.V(5).Infof("RBAC: using provider host %q, url: %q", hostStr, uri)
-				ref := providerv2alpha1.ProviderRefFromHost(strings.Split(hostStr, ":")[0])
+				ref := hostStr
 
 				a := authorizer.AttributesRecord{
 					User:            attrs.GetUser(),

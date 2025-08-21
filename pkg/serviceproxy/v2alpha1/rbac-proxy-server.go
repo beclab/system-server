@@ -43,15 +43,14 @@ func (s *server) Next(ctx echo.Context) *middleware.ProxyTarget {
 	if service := ctx.Get(serviceKey); service != nil {
 		if svcStr, ok := service.(string); ok {
 			klog.V(5).Infof("RBAC: using provider service %q", svcStr)
-			path := ctx.Request().URL.Path
-			urlStr := fmt.Sprintf("http://%s%s", svcStr, path)
+			proxyPassStr := fmt.Sprintf("http://%s", svcStr)
 
-			url, err := url.Parse(urlStr)
+			proxyPass, err := url.Parse(proxyPassStr)
 			if err != nil {
-				klog.Errorf("failed to parse URL %s: %v", urlStr, err)
+				klog.Errorf("failed to parse URL %s: %v", proxyPassStr, err)
 				return nil
 			}
-			return &middleware.ProxyTarget{URL: url}
+			return &middleware.ProxyTarget{URL: proxyPass}
 		}
 	}
 
