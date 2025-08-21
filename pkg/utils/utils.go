@@ -75,3 +75,11 @@ func Md5String(s string) string {
 	hashString := hex.EncodeToString(hash[:])
 	return hashString
 }
+
+func AppId(s string) string {
+	// AppId is the md5 hash of the app name
+	if s == "" {
+		return ""
+	}
+	return Md5String(s)[:8]
+}

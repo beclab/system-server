@@ -10,28 +10,26 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (h *handler) getProvider(ctx context.Context, user string, providerAppName, providerAppId, providerAppNamespace string) ([]*rbacv1.ClusterRole, error) {
-	clusterRoles, err := h.kubeClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.Errorf("Failed to list cluster roles: %v", err)
-		return nil, err
-	}
-
+func (h *handler) getProvider(providerName, providerDomain, providerAppNamespace string) []*rbacv1.ClusterRole {
+	// we cannot assume the provider exists, so we need to mock  cluster roles for it
 	var roles []*rbacv1.ClusterRole
-	for _, role := range clusterRoles.Items {
-		if providerRef, ok := role.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok {
-			switch {
-			case
-				providerRef == h.userProviderRef(user, providerAppName),
-				providerRef == h.appProviderRef(providerAppNamespace, providerAppName),
-				providerRef == h.appDomainProviderRef(user, providerAppId):
-				klog.Infof("Found provider role: %s for user: %s", role.Name, user)
-				roles = append(roles, &role)
-			}
+	for _, ref := range []string{
+		h.appProviderRef(providerAppNamespace, providerName),
+		h.appDomainProviderRef(providerDomain),
+	} {
+		role := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: providerv2alpha1.GetRoleNameForRef(ref),
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+				Kind:       "ClusterRole",
+			},
 		}
+		roles = append(roles, role)
 	}
 
-	return roles, nil
+	return roles
 }
 
 func (h *handler) bindingProvider(ctx context.Context, user, app, serviceAccount string, roles []*rbacv1.ClusterRole) error {
@@ -93,8 +91,8 @@ func (h *handler) userProviderRef(user, providerName string) string {
 	return fmt.Sprintf("user-system-%s/%s", user, providerName)
 }
 
-func (h *handler) appDomainProviderRef(user, providerAppId string) string {
-	return fmt.Sprintf("%s/%s", user, providerAppId)
+func (h *handler) appDomainProviderRef(domain string) string {
+	return providerv2alpha1.ProviderRefFromHost(domain)
 }
 
 func (h *handler) appProviderRef(providerAppName, providerAppNamespace string) string {

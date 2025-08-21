@@ -126,7 +126,7 @@ func (r *nonResourceWithServiceRBACAuthorizor) Authorize(ctx context.Context, re
 	return "", authorizer.DecisionNoOpinion, reason, nil
 }
 
-func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context, user user.Info, bindingProvider string, visitor func(source fmt.Stringer, role *rbacv1.ClusterRole, rule *rbacv1.PolicyRule, err error) bool) {
+func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context, user user.Info, host string, visitor func(source fmt.Stringer, role *rbacv1.ClusterRole, rule *rbacv1.PolicyRule, err error) bool) {
 	if clusterRoleBindings, err := rr.clusterRoleBindingLister.ListClusterRoleBindings(ctx); err != nil {
 		if !visitor(nil, nil, nil, err) {
 			return
@@ -138,7 +138,7 @@ func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context,
 			if !applies {
 				continue
 			}
-			role, rules, err := rr.GetRoleReferenceRules(ctx, clusterRoleBinding.RoleRef, bindingProvider)
+			role, rules, err := rr.GetRoleReferenceRules(ctx, clusterRoleBinding.RoleRef, host)
 			if err != nil {
 				if !visitor(nil, nil, nil, err) {
 					return
@@ -157,7 +157,7 @@ func (rr *nonResourceWithServiceRuleResolver) VisitRulesFor(ctx context.Context,
 }
 
 // GetRoleReferenceRules attempts to resolve the RoleBinding or ClusterRoleBinding.
-func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.Context, roleRef rbacv1.RoleRef, bindingProvider string) (*rbacv1.ClusterRole, []rbacv1.PolicyRule, error) {
+func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.Context, roleRef rbacv1.RoleRef, host string) (*rbacv1.ClusterRole, []rbacv1.PolicyRule, error) {
 	switch roleRef.Kind {
 	case "ClusterRole":
 		clusterRole, err := rr.clusterRoleGetter.GetClusterRole(ctx, roleRef.Name)
@@ -165,9 +165,17 @@ func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.
 			return nil, nil, err
 		}
 
+		bindingProvider := providerv2alpha1.ProviderRefFromHost(host)
 		if annotation, ok := clusterRole.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok {
 			klog.V(5).Info("it's a cluster role of a provider, annotation: ", annotation)
 			if annotation == bindingProvider {
+				return clusterRole, clusterRole.Rules, nil
+			}
+		}
+
+		if annotation, ok := clusterRole.Annotations[providerv2alpha1.ProviderServiceAnnotation]; ok {
+			if annotation == host {
+				klog.Info("it's a cluster role of a provider service, annotation: ", annotation)
 				return clusterRole, clusterRole.Rules, nil
 			}
 		}

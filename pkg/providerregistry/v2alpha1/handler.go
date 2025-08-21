@@ -29,7 +29,7 @@ func (h *handler) register(req *restful.Request, resp *restful.Response) {
 
 	for _, provider := range providerReq.Providers {
 		if err := h.createRefForProvider(req.Request.Context(),
-			providerReq.AppName, providerReq.AppNamespace, provider); err != nil {
+			providerReq.AppName, providerReq.AppNamespace, &provider); err != nil {
 			klog.Error("failed to create reference for provider: ", err)
 			api.HandleError(resp, req, err)
 			return
@@ -55,7 +55,7 @@ func (h *handler) unregister(req *restful.Request, resp *restful.Response) {
 
 	for _, provider := range providerReq.Providers {
 		if err = h.deleteRefForProvider(req.Request.Context(),
-			providerReq.AppName, providerReq.AppNamespace, provider); err != nil {
+			providerReq.AppName, providerReq.AppNamespace, &provider); err != nil {
 			klog.Error("failed to delete reference for provider: ", err)
 			api.HandleError(resp, req, err)
 			return

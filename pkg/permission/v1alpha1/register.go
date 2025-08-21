@@ -38,26 +38,6 @@ func AddPermissionControlToContainer(c *restful.Container,
 	handler := newHandler(ctrlSet, kubeconfig)
 
 	ws := newWebService()
-	// ws.Route(ws.POST("/access").
-	// 	To(handler.auth).
-	// 	Doc("request a data access token").
-	// 	Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
-	// 	Returns(http.StatusOK, "Success to get a token", &AccessTokenResponse{}))
-
-	// ws.Route(ws.POST("/register").
-	// 	To(handler.register).
-	// 	Doc("register a data invoker").
-	// 	Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
-	// 	Param(ws.HeaderParameter(api.AuthorizationTokenHeader, "Auth token")).
-	// 	Returns(http.StatusOK, "Success to register a invoker", &RegisterResp{}))
-
-	// ws.Route(ws.POST("/unregister").
-	// 	To(handler.unregister).
-	// 	Doc("unregister a data invoker").
-	// 	Metadata(restfulspec.KeyOpenAPITags, MODULE_TAGS).
-	// 	Param(ws.HeaderParameter(api.AuthorizationTokenHeader, "Auth token")).
-	// 	Returns(http.StatusOK, "Success to unregister a invoker", &response.Response{}))
-
 	ws.Route(ws.GET("/nonce").
 		To(handler.nonce).
 		Doc("get backend request call nonce").

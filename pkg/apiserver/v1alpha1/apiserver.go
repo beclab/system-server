@@ -78,7 +78,7 @@ func (s *APIServer) PrepareRun(
 	// use the server context for goroutine in background
 	utilruntime.Must(addServiceToContainer(s.serverCtx, s.container, kubeconfig, registry, &ctrlSet))
 	// utilruntime.Must(message.AddMessageDispatcherToContainer(s.serverCtx, sysclientset, s.container, s.dbOperator, &ctrlSet))
-	// utilruntime.Must(permission.AddPermissionControlToContainer(s.container, &ctrlSet, kubeconfig))
+	utilruntime.Must(permission.AddPermissionControlToContainer(s.container, &ctrlSet, kubeconfig))
 	// utilruntime.Must(legacy.AddLegacyAPIToContainer(s.container, registry))
 	// utilruntime.Must(legacy.AddLegacyAPIV2ToContainer(s.container, registry))
 

@@ -6,7 +6,6 @@ import (
 
 	"bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api"
 	"bytetrade.io/web3os/system-server/pkg/apiserver/v1alpha1/api/response"
-	"bytetrade.io/web3os/system-server/pkg/utils"
 	"bytetrade.io/web3os/system-server/pkg/utils/apitools"
 	"github.com/emicklei/go-restful/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -65,11 +64,19 @@ func (h *handler) execute(req *restful.Request, resp *restful.Response, username
 		return
 	}
 
-	appName = perm.App
-	appId := utils.Md5String(appName)
-
 	for _, p := range perm.Perm {
 		if p.ProviderName == "" {
+			klog.Warning("provider name is empty")
+			continue
+		}
+
+		if p.ProviderAppName == "" {
+			klog.Warning("provider app name is empty")
+			continue
+		}
+
+		if p.ProviderNamespace == "" {
+			klog.Warning("provider namespace is empty")
 			continue
 		}
 
@@ -77,12 +84,7 @@ func (h *handler) execute(req *restful.Request, resp *restful.Response, username
 			p.ServiceAccount = ptr.To("default")
 		}
 
-		roles, err := h.getProvider(req.Request.Context(), username, p.ProviderName, appId, p.ProviderNamespace)
-		if err != nil {
-			klog.Error("fail to get provider roles, ", err)
-			api.HandleError(resp, req, err)
-			return
-		}
+		roles := h.getProvider(p.ProviderName, p.ProviderDomain, p.ProviderNamespace)
 
 		if len(roles) == 0 {
 			klog.Warning("no roles found for provider, ", appName)
