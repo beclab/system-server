@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	headerXForwardedURI = "X-Forwarded-Uri"
+	headerXForwardedURI  = "X-Forwarded-Uri"
+	headerXProviderProxy = "X-Provider-Proxy"
 )
 
 func ProviderServiceAddr(providerRef string) string {
@@ -38,11 +39,15 @@ func ProviderRefName(appName, namespace string) string {
 
 // GetXForwardedURI returns the content of the X-Forwarded-URI header, falling back to the start-line request path.
 func GetXForwardedURI(req *http.Request) (uri string) {
-	uri = req.Header.Get(headerXForwardedURI)
-
-	if len(uri) == 0 {
-		return req.URL.String()
+	for _, uriFunc := range []func() string{
+		func() string { return req.Header.Get(headerXProviderProxy) },
+		func() string { return req.Header.Get(headerXForwardedURI) },
+	} {
+		uri = uriFunc()
+		if len(uri) > 0 {
+			return uri
+		}
 	}
 
-	return uri
+	return req.URL.String() // default
 }
