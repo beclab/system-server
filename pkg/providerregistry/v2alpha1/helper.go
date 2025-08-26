@@ -47,6 +47,9 @@ func GetXForwardedHost(req *http.Request) (uri string) {
 	} {
 		uri = uriFunc()
 		if len(uri) > 0 {
+			if !strings.HasPrefix(uri, "https://") && !strings.HasPrefix(uri, "http://") {
+				uri = "http://" + uri
+			}
 			return uri
 		}
 	}
