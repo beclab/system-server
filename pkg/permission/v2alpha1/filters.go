@@ -61,10 +61,10 @@ func WithAuthorization(
 		for i, attrs := range allAttrs {
 			if attrs.GetPath() != "" && !attrs.IsResourceRequest() {
 				// for non-resource requests, setup the provider reference
-				uri := providerv2alpha1.GetXForwardedURI(r)
+				uri := providerv2alpha1.GetXForwardedHost(r)
 				requestUrl, err := url.Parse(uri)
 				if err != nil {
-					klog.Errorf("failed to parse X-Forwarded-URI: %v", err)
+					klog.Errorf("failed to parse X-Forwarded-Host: %v", err)
 					return nil
 				}
 				hostStr := requestUrl.Host

@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	headerXForwardedURI  = "X-Forwarded-Uri"
+	headerXForwardedHost = "X-Forwarded-Host"
 	headerXProviderProxy = "X-Provider-Proxy"
 )
 
@@ -39,11 +39,11 @@ func ProviderRefName(appName, namespace string) string {
 	return fmt.Sprintf("%s/%s", namespace, appName)
 }
 
-// GetXForwardedURI returns the content of the X-Forwarded-URI header, falling back to the start-line request path.
-func GetXForwardedURI(req *http.Request) (uri string) {
+// GetXForwardedHost returns the content of the X-Forwarded-URI header, falling back to the start-line request path.
+func GetXForwardedHost(req *http.Request) (uri string) {
 	for _, uriFunc := range []func() string{
 		func() string { return req.Header.Get(headerXProviderProxy) },
-		func() string { return req.Header.Get(headerXForwardedURI) },
+		func() string { return req.Header.Get(headerXForwardedHost) },
 	} {
 		uri = uriFunc()
 		if len(uri) > 0 {
