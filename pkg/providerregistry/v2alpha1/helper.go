@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"bytetrade.io/web3os/system-server/pkg/constants"
 )
 
 var (
@@ -23,7 +25,7 @@ func ProviderServiceAddr(providerRef string) string {
 func ProviderRefFromHost(host string) string {
 	token := strings.Split(strings.Split(host, ":")[0], ".")
 	if len(token) < 2 {
-		return host
+		return fmt.Sprintf("%s.user-space-%s", host, constants.Owner)
 	}
 
 	return fmt.Sprintf("%s/%s", token[1], token[0])
