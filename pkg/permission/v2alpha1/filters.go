@@ -74,6 +74,11 @@ func WithAuthorization(
 				klog.V(5).Infof("RBAC: using provider host %q, url: %q", hostStr, uri)
 				ref := hostStr
 
+				path := attrs.GetPath()
+				queryString := r.URL.RawQuery
+				if queryString != "" {
+					path = fmt.Sprintf("%s?%s", path, queryString)
+				}
 				a := authorizer.AttributesRecord{
 					User:            attrs.GetUser(),
 					Verb:            attrs.GetVerb(),
@@ -84,7 +89,7 @@ func WithAuthorization(
 					Subresource:     attrs.GetSubresource(),
 					Name:            attrs.GetName(),
 					ResourceRequest: attrs.IsResourceRequest(),
-					Path:            attrs.GetPath(),
+					Path:            path,
 				}
 				allAttrs[i] = a
 			}

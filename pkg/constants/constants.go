@@ -10,7 +10,7 @@ import (
 const (
 	ProxyServerServiceName    = "system-server"
 	ProxyServerListenAddress  = ":28080"
-	APIServerListenAddress    = ":84"
+	APIServerListenAddress    = ":80"
 	KubeSphereClientAttribute = "ksclient"
 	AuthorizationTokenKey     = "X-Authorization"
 	BflUserKey                = "X-BFL-USER"

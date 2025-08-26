@@ -21,7 +21,7 @@ func ProviderServiceAddr(providerRef string) string {
 }
 
 func ProviderRefFromHost(host string) string {
-	token := strings.Split(host, ".")
+	token := strings.Split(strings.Split(host, ":")[0], ".")
 	if len(token) < 2 {
 		return host
 	}
