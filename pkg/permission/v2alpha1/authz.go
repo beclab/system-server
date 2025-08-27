@@ -57,12 +57,13 @@ func (v *authorizingVisitor) visit(source fmt.Stringer, role *rbacv1.ClusterRole
 			if service, ok := role.Annotations[providerv2alpha1.ProviderServiceAnnotation]; ok {
 				v.service = service
 			}
+
 			klog.V(5).Infof("RBAC: allowed by %s with service %q", source.String(), v.service)
+			return false
 		} else {
 			v.reason = fmt.Sprintf("RBAC: denied by %s", source.String())
+			klog.V(5).Infof("RBAC: denied by %s, [%s]", source.String(), v.requestAttributes.GetPath())
 		}
-
-		return false
 	}
 
 	// it's not a cluster role of a provider, we have no opinion
@@ -162,13 +163,14 @@ func (rr *nonResourceWithServiceRuleResolver) GetRoleReferenceRules(ctx context.
 	case "ClusterRole":
 		clusterRole, err := rr.clusterRoleGetter.GetClusterRole(ctx, roleRef.Name)
 		if err != nil {
+			klog.Error("failed to get cluster role: ", err)
 			return nil, nil, err
 		}
 
 		bindingProvider := providerv2alpha1.ProviderRefFromHost(host)
 		if annotation, ok := clusterRole.Annotations[providerv2alpha1.ProviderRefAnnotation]; ok {
-			klog.V(5).Info("it's a cluster role of a provider, annotation: ", annotation)
 			if annotation == bindingProvider {
+				klog.V(5).Info("it's a cluster role of a provider, annotation: ", annotation)
 				return clusterRole, clusterRole.Rules, nil
 			}
 		}
