@@ -68,7 +68,6 @@ func (h *handler) createCusterRoleForRef(ctx context.Context, ref string, provid
 			return err
 		}
 		klog.Infof("Deleted existing cluster role %s for provider reference %s", roleName, ref)
-		return nil
 	}
 
 	_, err = h.kubeClient.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
