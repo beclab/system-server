@@ -59,7 +59,19 @@ func (h *handler) createCusterRoleForRef(ctx context.Context, ref string, provid
 		},
 	}
 
-	_, err := h.kubeClient.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
+	_, err := h.kubeClient.RbacV1().ClusterRoles().Get(ctx, roleName, metav1.GetOptions{})
+	if err == nil {
+		klog.Infof("Cluster role %s already exists for provider reference %s", roleName, ref)
+		err = h.kubeClient.RbacV1().ClusterRoles().Delete(ctx, roleName, metav1.DeleteOptions{})
+		if err != nil {
+			klog.Error("delete existing cluster role for provider err,", err)
+			return err
+		}
+		klog.Infof("Deleted existing cluster role %s for provider reference %s", roleName, ref)
+		return nil
+	}
+
+	_, err = h.kubeClient.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
 	if err != nil {
 		klog.Error("create cluster role for privder err,", err)
 		return err

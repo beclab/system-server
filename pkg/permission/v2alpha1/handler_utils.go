@@ -14,7 +14,7 @@ func (h *handler) getProvider(providerName, providerDomain, providerAppNamespace
 	// we cannot assume the provider exists, so we need to mock  cluster roles for it
 	var roles []*rbacv1.ClusterRole
 	for _, ref := range []string{
-		h.appProviderRef(providerAppNamespace, providerName),
+		h.appProviderRef(providerName, providerAppNamespace),
 		h.appDomainProviderRef(providerDomain),
 	} {
 		role := &rbacv1.ClusterRole{
@@ -62,6 +62,27 @@ func (h *handler) bindingProvider(ctx context.Context, user, app, serviceAccount
 				return err
 			}
 			continue
+		}
+
+		if _, err := h.kubeClient.RbacV1().ClusterRoles().Get(ctx, role.Name, metav1.GetOptions{}); err != nil {
+			klog.Errorf("Cluster role %s does not exist for binding %s: %v", role.Name, binding.Name, err)
+			// create a placeholder role to bind to
+			placeholderRole := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: role.Name,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						Verbs:           []string{"*"},
+						NonResourceURLs: []string{"/placeholder-mock"},
+					},
+				},
+			}
+			if _, err := h.kubeClient.RbacV1().ClusterRoles().Create(ctx, placeholderRole, metav1.CreateOptions{}); err != nil {
+				klog.Errorf("Failed to create placeholder cluster role %s: %v", role.Name, err)
+				return err
+			}
+			klog.Infof("Created placeholder cluster role %s for binding %s", role.Name, binding.Name)
 		}
 
 		if _, err := h.kubeClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{}); err != nil {
