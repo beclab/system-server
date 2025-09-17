@@ -28,17 +28,24 @@ type lldapTokenAuthenticator struct {
 
 // AuthenticateRequest implements authenticator.Request.
 func (l *lldapTokenAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
-	token := req.Header.Get(constants.AuthorizationTokenKey)
-	if token == "" {
-		cookie, err := req.Cookie(constants.AuthTokenCookieName)
-		if err != nil {
-			if err == http.ErrNoCookie {
-				return nil, false, nil // No token found
-			}
+	cookie, err := req.Cookie(constants.AuthTokenCookieName)
+	var token string
+	if err != nil {
+		if err != http.ErrNoCookie {
 			return nil, false, fmt.Errorf("error retrieving cookie: %w", err)
 		}
+	}
 
+	if err == nil && cookie != nil {
 		token = cookie.Value
+	}
+
+	if token == "" {
+		token = req.Header.Get(constants.AuthorizationTokenKey)
+	}
+
+	if token == "" {
+		return nil, false, nil // No token found
 	}
 
 	claims := l.tokenCache.Get(token)
