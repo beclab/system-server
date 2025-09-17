@@ -80,6 +80,39 @@ func (l *lldapTokenAuthenticator) AuthenticateRequest(req *http.Request) (*authe
 	return &response, true, nil
 }
 
+var _ authenticator.Request = (*autheliaNonceAuthenticator)(nil)
+
+type autheliaNonceAuthenticator struct {
+}
+
+// AuthenticateRequest implements authenticator.Request.
+func (a *autheliaNonceAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
+	nonce := req.Header.Get(constants.AutheliaNonceKey)
+	if nonce == "" {
+		return nil, false, nil // No nonce found
+	}
+
+	if nonce != constants.Nonce {
+		return nil, false, fmt.Errorf("invalid nonce")
+	}
+
+	u := req.Header.Get(constants.BflUserKey)
+	if u == "" {
+		return nil, false, fmt.Errorf("no user found in header")
+	}
+
+	klog.Info("authelia nonce verified successfully for user: ", u)
+	response := authenticator.Response{
+		User: &user.DefaultInfo{
+			Name:   u,
+			Groups: []string{"authelia:backend"},
+			UID:    u,
+		},
+	}
+
+	return &response, true, nil
+}
+
 func UnionAllAuthenticators(ctx context.Context, cfg *AuthnConfig, kubeClient kubernetes.Interface) (authenticator.Request, error) {
 	var authenticator authenticator.Request
 
@@ -106,9 +139,12 @@ func UnionAllAuthenticators(ctx context.Context, cfg *AuthnConfig, kubeClient ku
 		authenticator = delegatingAuthenticator
 	}
 
-	return union.New(&lldapTokenAuthenticator{ttlcache.New(
-		ttlcache.WithTTL[string, *Claims](tokenCacheTTL),
-		ttlcache.WithCapacity[string, *Claims](1000),
-	), fmt.Sprintf("http://%s:%d", cfg.LLDAP.Server, cfg.LLDAP.Port),
-	}, authenticator), nil
+	return union.New(
+		&lldapTokenAuthenticator{ttlcache.New(
+			ttlcache.WithTTL[string, *Claims](tokenCacheTTL),
+			ttlcache.WithCapacity[string, *Claims](1000),
+		), fmt.Sprintf("http://%s:%d", cfg.LLDAP.Server, cfg.LLDAP.Port),
+		},
+		&autheliaNonceAuthenticator{},
+		authenticator), nil
 }

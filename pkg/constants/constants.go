@@ -15,6 +15,7 @@ const (
 	AuthorizationTokenKey     = "X-Authorization"
 	BflUserKey                = "X-BFL-USER"
 	AuthTokenCookieName       = "auth_token"
+	AutheliaNonceKey          = "Authelia-Nonce"
 )
 
 var (
