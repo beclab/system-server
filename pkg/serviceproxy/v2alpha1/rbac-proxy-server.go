@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	permv2alpha1 "bytetrade.io/web3os/system-server/pkg/permission/v2alpha1"
 	"bytetrade.io/web3os/system-server/pkg/utils"
@@ -43,7 +44,15 @@ func (s *server) Next(ctx echo.Context) *middleware.ProxyTarget {
 	if service := ctx.Get(serviceKey); service != nil {
 		if svcStr, ok := service.(string); ok {
 			klog.V(5).Infof("RBAC: using provider service %q", svcStr)
-			proxyPassStr := fmt.Sprintf("http://%s", svcStr)
+			var proxyPassStr string
+			// if the service string is like "http://service.namespace.svc:port" or "https://service.namespace.svc:port"
+			// we use it directly, otherwise we add "http://" prefix
+			if strings.HasPrefix(svcStr, "http://") || strings.HasPrefix(svcStr, "https://") {
+				proxyPassStr = svcStr
+			} else {
+				// otherwise we assume it is like "service.namespace.svc:port"
+				proxyPassStr = fmt.Sprintf("http://%s", svcStr)
+			}
 
 			proxyPass, err := url.Parse(proxyPassStr)
 			if err != nil {

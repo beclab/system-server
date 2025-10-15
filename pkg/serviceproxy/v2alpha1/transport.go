@@ -21,6 +21,7 @@ func initTransport(upstreamCAPool *x509.CertPool, upstreamClientCertPath, upstre
 		MaxIdleConns:          100,
 		IdleConnTimeout:       10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 	}
 
 	if upstreamCAPool == nil {
