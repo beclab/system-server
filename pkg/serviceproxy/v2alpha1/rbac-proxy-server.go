@@ -119,6 +119,16 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 	}
 
 	config.Transport = transport
+
+	// proxy for http
+	config.Skipper = func(c echo.Context) bool {
+		return c.IsWebSocket()
+	}
+	s.proxy.Use(middleware.ProxyWithConfig(config))
+
+	// proxy for websocket
+	config.Skipper = nil
+	config.Transport.(*http.Transport).TLSClientConfig = nil
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
 	cfg.informerFactory.Start(s.mainCtx.Done())
