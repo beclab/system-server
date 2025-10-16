@@ -120,9 +120,9 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 
 	config.Transport = transport
 
-	// proxy for http
+	// proxy for http and https
 	config.Skipper = func(c echo.Context) bool {
-		return c.IsWebSocket()
+		return c.IsWebSocket() && !c.IsTLS()
 	}
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
