@@ -127,9 +127,17 @@ func (s *server) Init(cfg *completedProxyRunOptions) error {
 	s.proxy.Use(middleware.ProxyWithConfig(config))
 
 	// proxy for websocket
-	config.Skipper = nil
-	config.Transport.(*http.Transport).TLSClientConfig = nil
-	s.proxy.Use(middleware.ProxyWithConfig(config))
+	websocketConfig := config
+	websocketTransport, err := initTransport(cfg.upstreamCABundle, cfg.tls.UpstreamClientCertFile, cfg.tls.UpstreamClientKeyFile)
+	if err != nil {
+		klog.Error(err)
+		return err
+	}
+	websocketTransport.(*http.Transport).TLSClientConfig = nil
+
+	websocketConfig.Skipper = nil
+	websocketConfig.Transport = websocketTransport
+	s.proxy.Use(middleware.ProxyWithConfig(websocketConfig))
 
 	cfg.informerFactory.Start(s.mainCtx.Done())
 	go func() {
